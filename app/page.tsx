@@ -122,7 +122,7 @@ export default function RhythmGame() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [myMusicList, setMyMusicList] = useState<Song[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
-  const [instrumentMode, setInstrumentMode] = useState<'all' | 'vocals' | 'other' | 'drums' | 'bass'>('all');
+  const [instrumentMode, setInstrumentMode] = useState<'other' | 'drums' | 'bass'>('drums');
   const [isLoadingSong, setIsLoadingSong] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -136,7 +136,7 @@ export default function RhythmGame() {
   const startTimeRef = useRef<number>(0);
   const startGameRequestRef = useRef<boolean>(false);
   const difficultyRef = useRef('normal');
-  const instrumentModeRef = useRef<'all' | 'vocals' | 'other' | 'drums' | 'bass'>('all');
+  const instrumentModeRef = useRef<'other' | 'drums' | 'bass'>('drums');
   
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
   useEffect(() => { instrumentModeRef.current = instrumentMode; }, [instrumentMode]);
@@ -202,11 +202,9 @@ export default function RhythmGame() {
             
             audioBufferRef.current = { vocals: vocBuf, other: otherBuf, drums: drumBuf, bass: bassBuf };
             
-            if (instrumentMode === 'vocals') analyzeBuffer = vocBuf;
-            else if (instrumentMode === 'drums') analyzeBuffer = drumBuf;
+            if (instrumentMode === 'drums') analyzeBuffer = drumBuf;
             else if (instrumentMode === 'bass') analyzeBuffer = bassBuf;
-            else analyzeBuffer = drumBuf; // For 'all' or 'other', drum or other is fine, let's use other for guitar mode. Wait, if it's 'all' maybe we just analyze drums anyway, or 'other' for guitar
-            if (instrumentMode === 'other') analyzeBuffer = otherBuf;
+            else analyzeBuffer = otherBuf; // Guitar/Other
             
         } else {
             let arrayBuffer: ArrayBuffer;
@@ -798,7 +796,6 @@ export default function RhythmGame() {
                 
                 // Targeted penalty routing
                 if (
-                    (mode === 'vocals' && stem === 'vocals') ||
                     (mode === 'other' && stem === 'other') ||
                     (mode === 'drums' && stem === 'drums') ||
                     (mode === 'bass' && stem === 'bass')
@@ -812,16 +809,6 @@ export default function RhythmGame() {
                 audioSourcesRef.current.push(source);
                 source.start(startTime); // Start synchronously
             });
-            
-            // If mode is 'all', target the MasterGain for penalty
-            if (mode === 'all') {
-                 const allPenalty = audioCtxRef.current.createGain();
-                 allPenalty.gain.value = 1.0;
-                 masterGainNode.disconnect();
-                 masterGainNode.connect(allPenalty);
-                 allPenalty.connect(audioCtxRef.current.destination);
-                 audioGainNodeRef.current = allPenalty;
-            }
             
             startTimeRef.current = startTime;
           }
@@ -899,8 +886,8 @@ export default function RhythmGame() {
             const ctx = audioCtxRef.current;
             const now = ctx.currentTime;
             
-            // If playing an isolated stem, mute it entirely. If 'all' or single track, just duck to 0.4
-            const duckVolume = instrumentModeRef.current === 'all' ? 0.4 : 0.0;
+            // Fixed duck volume for isolated stems
+            const duckVolume = 0.0;
             
             audioGainNodeRef.current.gain.cancelScheduledValues(now);
             audioGainNodeRef.current.gain.setValueAtTime(audioGainNodeRef.current.gain.value || 1.0, now);
@@ -1180,8 +1167,8 @@ export default function RhythmGame() {
                     <div className="text-emerald-500/80 font-bold tracking-widest text-xs uppercase mb-3">
                         Target Instrument
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {(['all', 'vocals', 'other', 'drums', 'bass'] as const).map(inst => (
+                    <div className="grid grid-cols-3 gap-2">
+                        {(['other', 'drums', 'bass'] as const).map(inst => (
                             <button
                                 key={inst}
                                 onClick={() => setInstrumentMode(inst)}
