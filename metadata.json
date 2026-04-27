@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 11: Dynamic BPM detection from the parsed MP3 beatmap. The game speed (note falling velocity) accurately calculates from the detected BPM instead of arbitrary difficulty thresholds, and a live BPM meter is added into the game HUD.",
+  "description": "Step 12: Expanded canvas vertical viewing area for better note visibility, removed dynamic BPM detection, and locked speed scaling to a static 158-180 BPM range based directly on difficulty.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

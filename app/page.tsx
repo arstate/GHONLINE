@@ -69,9 +69,19 @@ export default function RhythmGame() {
     };
     const activeLanes = [false, false, false, false, false];
 
-    const getSpeed = () => {
-      const currentBpm = bpmRef.current || 120;
-      return Math.max(3, Math.min(currentBpm / 24, 12));
+    const getBpmSetting = (diff: string) => {
+      switch (diff) {
+        case 'easy': return 158;
+        case 'normal': return 165;
+        case 'hard': return 175;
+        case 'expert': return 180;
+        default: return 165;
+      }
+    };
+
+    const getSpeed = (diff: string) => {
+      const simulatedBpm = getBpmSetting(diff);
+      return Math.max(3, Math.min(simulatedBpm / 24, 12));
     };
 
     class Note {
@@ -308,7 +318,7 @@ export default function RhythmGame() {
               let availableLanes = [0,1,2,3,4];
               
               // Only determining `speed` dynamically for `hold` length.
-              const spd = getSpeed();
+              const spd = getSpeed(diff);
               
               for(let n=0; n<numNotes; n++) {
                   if (availableLanes.length === 0) break;
@@ -326,19 +336,11 @@ export default function RhythmGame() {
           }
           beatMapRef.current = beatMap;
           
-          let validIntervals: number[] = [];
-          for (let j = 1; j < beatMap.length; j++) {
-              const bDiff = beatMap[j].time - beatMap[j-1].time;
-              if (bDiff > 0.2 && bDiff < 2.0) { // Valid roughly between 30 and 300 BPM
-                  validIntervals.push(bDiff);
-              }
-          }
-          const avgInterval = validIntervals.length > 0 ? validIntervals.reduce((a,b)=>a+b, 0) / validIntervals.length : 0.5;
-          const calculatedBpm = Math.round(60 / avgInterval);
-          setBpm(calculatedBpm);
-          bpmRef.current = calculatedBpm;
+          const simulatedBpm = getBpmSetting(diff);
+          setBpm(simulatedBpm);
+          bpmRef.current = simulatedBpm;
           
-          console.log(`Generated ${beatMap.length} beats for ${diff} mode. Estimated BPM: ${calculatedBpm}`);
+          console.log(`Generated ${beatMap.length} beats for ${diff} mode. Simulated BPM: ${simulatedBpm}`);
         }
 
         if (audioCtxRef.current && audioBufferRef.current) {
@@ -366,7 +368,7 @@ export default function RhythmGame() {
         }
       }
 
-      const currentSpeed = getSpeed();
+      const currentSpeed = getSpeed(difficultyRef.current);
 
       if (gameActiveRef.current && audioCtxRef.current) {
         const playbackTime = audioCtxRef.current.currentTime - startTimeRef.current;
@@ -565,14 +567,14 @@ export default function RhythmGame() {
         <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] bg-orange-900/10 blur-[120px] rounded-full"></div>
       </div>
 
-      <div className="relative w-full max-w-[500px] flex justify-center z-10 aspect-[5/6]">
+      <div className="relative w-full max-w-[500px] flex justify-center z-10 aspect-[5/8]">
         <div className="relative w-full h-full shadow-2xl rounded-xl p-1 bg-gradient-to-b from-white/10 to-transparent flex flex-col">
           
           {/* Game Canvas Container */}
           <canvas
             ref={canvasRef}
             width={500}
-            height={600}
+            height={800}
             className="w-full h-auto bg-[#0c0c0c] rounded-lg block touch-none"
           />
           
