@@ -4,38 +4,30 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function RhythmGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [score, setScore] = useState(0);
+  const [score, setScore] = useState(0); // keep for lobby if needed
+  const currentScoreRef = useRef(0);
   const [isReady, setIsReady] = useState(false);
-  const [gameState, setGameState] = useState<'lobby' | 'playing'>('lobby');
+  const [gameState, setGameState] = useState<'lobby' | 'game'>('lobby');
   const [difficulty, setDifficulty] = useState('normal');
 
   // Audio and game state refs
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
-  const beatMapRef = useRef<number[]>([]);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const beatMapRef = useRef<any[]>([]);
   const spawnedIndexRef = useRef<number>(0);
   const gameActiveRef = useRef<boolean>(false);
   const startTimeRef = useRef<number>(0);
-  const difficultyRef = useRef<string>('normal');
+  const startGameRequestRef = useRef<boolean>(false);
+  const difficultyRef = useRef('normal');
+  
+  useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
 
   const startGame = () => {
-    if (!audioCtxRef.current || !audioBufferRef.current) return;
-    
-    if (audioCtxRef.current.state === 'suspended') {
-        audioCtxRef.current.resume();
-    }
-    
-    setGameState('playing');
-    
-    // Create source and play
-    const source = audioCtxRef.current.createBufferSource();
-    source.buffer = audioBufferRef.current;
-    source.connect(audioCtxRef.current.destination);
-    source.start(0);
-    
-    startTimeRef.current = audioCtxRef.current.currentTime;
-    gameActiveRef.current = true;
+    setGameState('game');
+    startGameRequestRef.current = true;
   };
+
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,11 +46,13 @@ export default function RhythmGame() {
     };
     const activeLanes = [false, false, false, false, false];
 
-    const speedMap: Record<string, number> = {
-      easy: 3,
-      normal: 5, // slightly faster to compensate for 60fps avg
-      hard: 7,
-      expert: 10
+    const getSpeed = (diff: string) => {
+      switch (diff) {
+        case 'easy': return 2.5;
+        case 'hard': return 6;
+        case 'expert': return 8;
+        default: return 4; // normal
+      }
     };
 
     class Note {
@@ -67,24 +61,50 @@ export default function RhythmGame() {
       y: number;
       speed: number;
       color: string;
+      type: 'tap' | 'hold';
+      length: number;
+      isActiveHold: boolean;
 
-      constructor(lane: number, x: number) {
+      constructor(lane: number, x: number, speed: number, type: 'tap' | 'hold', length: number = 0) {
         this.lane = lane;
         this.x = x;
         this.y = 0;
-        this.speed = speedMap[difficultyRef.current] || 5;
+        this.speed = speed;
         this.color = colors[lane];
+        this.type = type;
+        this.length = length;
+        this.isActiveHold = false;
       }
     }
 
     const notes: Note[] = [];
+    const activeHolds: (Note | null)[] = [null, null, null, null, null];
     let animationId: number;
 
     const update = () => {
       for (let i = notes.length - 1; i >= 0; i--) {
-        notes[i].y += notes[i].speed;
-        if (notes[i].y > height) {
-          notes.splice(i, 1);
+        const note = notes[i];
+        note.y += note.speed;
+        
+        if (note.isActiveHold) {
+           currentScoreRef.current += 1;
+           const s1 = document.getElementById('scoreDisplay');
+           const s2 = document.getElementById('scoreDisplayGame');
+           const val = currentScoreRef.current.toString().padStart(6, '0');
+           if (s1) s1.innerText = val;
+           if (s2) s2.innerText = val;
+           
+           if (note.y - note.length > hitboxY) {
+               currentScoreRef.current += 50;
+               notes.splice(i, 1);
+               activeHolds[note.lane] = null;
+           }
+        } else {
+           if (note.type === 'hold' && note.y - note.length > height) {
+               notes.splice(i, 1);
+           } else if (note.type === 'tap' && note.y > height) {
+               notes.splice(i, 1);
+           }
         }
       }
     };
@@ -112,15 +132,41 @@ export default function RhythmGame() {
         ctx.shadowBlur = 15;
         ctx.shadowColor = note.color;
         
-        ctx.beginPath();
-        ctx.arc(note.x, note.y, 25, 0, Math.PI * 2);
-        ctx.fillStyle = note.color;
-        ctx.fill();
+        if (note.type === 'hold') {
+            const holdWidth = 20;
+            const topY = note.y - note.length;
+            const drawBottomY = note.isActiveHold ? Math.max(topY, hitboxY) : note.y;
+            
+            // Body
+            ctx.fillStyle = note.color + '88';
+            ctx.fillRect(note.x - holdWidth / 2, topY, holdWidth, drawBottomY - topY);
+            
+            // Top Cap
+            ctx.beginPath();
+            ctx.arc(note.x, topY, holdWidth / 2, 0, Math.PI * 2);
+            ctx.fillStyle = note.color;
+            ctx.fill();
+            
+            // Bottom Cap
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(note.x, drawBottomY, 25, 0, Math.PI * 2);
+            ctx.fillStyle = note.isActiveHold ? '#ffffff' : note.color;
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            ctx.arc(note.x, note.y, 25, 0, Math.PI * 2);
+            ctx.fillStyle = note.color;
+            ctx.fill();
 
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
       });
 
       // Draw Buttons in Hitbox
@@ -166,18 +212,96 @@ export default function RhythmGame() {
     };
 
     const gameLoop = () => {
+      if (startGameRequestRef.current) {
+        startGameRequestRef.current = false;
+        notes.length = 0;
+        spawnedIndexRef.current = 0;
+        currentScoreRef.current = 0;
+        
+        const s1 = document.getElementById('scoreDisplay');
+        const s2 = document.getElementById('scoreDisplayGame');
+        if (s1) s1.innerText = '000000';
+        if (s2) s2.innerText = '000000';
+        
+        if (audioBufferRef.current) {
+          const channelData = audioBufferRef.current.getChannelData(0);
+          const sampleRate = audioBufferRef.current.sampleRate;
+          const diff = difficultyRef.current;
+          
+          let threshold = 0.8;
+          let cooldownSecs = 0.2;
+          let holdProb = 0.1;
+          
+          if (diff === 'easy') { threshold = 0.9; cooldownSecs = 0.35; holdProb = 0.05; }
+          else if (diff === 'hard') { threshold = 0.6; cooldownSecs = 0.15; holdProb = 0.25; }
+          else if (diff === 'expert') { threshold = 0.45; cooldownSecs = 0.1; holdProb = 0.4; }
+          
+          const beatMap: any[] = [];
+          let lastPeakTime = -cooldownSecs;
+
+          for (let i = 0; i < channelData.length; i++) {
+            const val = Math.abs(channelData[i]);
+            const currentTime = i / sampleRate;
+            
+            if (val > threshold && (currentTime - lastPeakTime) > cooldownSecs) {
+              const numNotes = (diff === 'expert' && val > 0.85) ? (val > 0.95 ? 3 : 2) : (diff === 'hard' && val > 0.9 ? 2 : 1);
+              const beatNotes = [];
+              let availableLanes = [0,1,2,3,4];
+              
+              // Only determining `speed` dynamically for `hold` length.
+              const spd = getSpeed(diff);
+              
+              for(let n=0; n<numNotes; n++) {
+                  if (availableLanes.length === 0) break;
+                  const laneIdx = Math.floor(Math.random() * availableLanes.length);
+                  const lane = availableLanes.splice(laneIdx, 1)[0];
+                  // If it's a multiple note spawn, only maybe make the first one a hold note
+                  const isHold = n === 0 && Math.random() < holdProb;
+                  const length = isHold ? (spd * 60 * (0.3 + Math.random() * 0.7)) : 0;
+                  beatNotes.push({ lane, type: isHold ? 'hold' : 'tap', length });
+              }
+              
+              beatMap.push({ time: currentTime, energy: val, notes: beatNotes });
+              lastPeakTime = currentTime;
+            }
+          }
+          beatMapRef.current = beatMap;
+          console.log(`Generated ${beatMap.length} beats for ${diff} mode`);
+        }
+
+        if (audioCtxRef.current && audioBufferRef.current) {
+          if (audioCtxRef.current.state === 'suspended') {
+            audioCtxRef.current.resume();
+          }
+          if (audioSourceRef.current) {
+             try { audioSourceRef.current.stop(); } catch(e) {}
+          }
+          const source = audioCtxRef.current.createBufferSource();
+          source.buffer = audioBufferRef.current;
+          source.connect(audioCtxRef.current.destination);
+          source.start(0);
+          audioSourceRef.current = source;
+          
+          startTimeRef.current = audioCtxRef.current.currentTime;
+          gameActiveRef.current = true;
+        }
+      }
+
+      const currentSpeed = getSpeed(difficultyRef.current);
+
       if (gameActiveRef.current && audioCtxRef.current) {
         const playbackTime = audioCtxRef.current.currentTime - startTimeRef.current;
-        const currentSpeed = speedMap[difficultyRef.current] || 5;
         const fallTime = hitboxY / (currentSpeed * 60);
 
         const beats = beatMapRef.current;
         while (spawnedIndexRef.current < beats.length) {
-          const beatTime = beats[spawnedIndexRef.current];
-          if (playbackTime >= beatTime - fallTime) {
-             const lane = Math.floor(Math.random() * 5);
-             const x = (lane * laneWidth) + (laneWidth / 2);
-             notes.push(new Note(lane, x));
+          const beat = beats[spawnedIndexRef.current];
+          if (playbackTime >= beat.time - fallTime) {
+             beat.notes.forEach((bn: any) => {
+                 const x = (bn.lane * laneWidth) + (laneWidth / 2);
+                 notes.push(new Note(bn.lane, x, currentSpeed, bn.type, bn.length));
+             });
+
              spawnedIndexRef.current++;
           } else {
              break;
@@ -195,33 +319,18 @@ export default function RhythmGame() {
       const file = target.files?.[0];
       if (!file) return;
 
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioCtxRef.current = audioCtx;
+      let audioCtx = audioCtxRef.current;
+      if (!audioCtx) {
+         audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+         audioCtxRef.current = audioCtx;
+      }
+      
       const arrayBuffer = await file.arrayBuffer();
       
       try {
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
         audioBufferRef.current = audioBuffer;
-        const channelData = audioBuffer.getChannelData(0); // Only use channel 0 for detection
-        const sampleRate = audioBuffer.sampleRate;
-        
-        const beatMap: number[] = [];
-        const threshold = 0.8;
-        const cooldownSecs = 0.2; // 200 milidetik cooldown
-        let lastPeakTime = -cooldownSecs;
-
-        for (let i = 0; i < channelData.length; i++) {
-          const val = Math.abs(channelData[i]);
-          const currentTime = i / sampleRate;
-          
-          if (val > threshold && (currentTime - lastPeakTime) > cooldownSecs) {
-            beatMap.push(currentTime);
-            lastPeakTime = currentTime;
-          }
-        }
-        
-        console.log("Beatmap generated (timestamps in seconds):", beatMap);
-        beatMapRef.current = beatMap;
+        console.log("Audio decoded successfully.");
         setIsReady(true);
       } catch (err) {
         console.error("Error decoding audio data", err);
@@ -231,46 +340,113 @@ export default function RhythmGame() {
     const audioUploadElement = document.getElementById('audioUpload');
     audioUploadElement?.addEventListener('change', handleFileUpload);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent default scrolling for game keys if needed
-      if (['a', 's', 'j', 'k', 'l'].includes(e.key.toLowerCase())) {
-        if (gameActiveRef.current) e.preventDefault();
-      }
+    const triggerHit = (laneIndex: number) => {
+        if (activeLanes[laneIndex]) return;
+        activeLanes[laneIndex] = true;
+        
+        let hitIndex = -1;
+        let minDiff = Infinity;
+        for (let j = 0; j < notes.length; j++) {
+            const note = notes[j];
+            if (note.lane === laneIndex && !note.isActiveHold) {
+                const diff = Math.abs(note.y - hitboxY);
+                if (diff < 55 && diff < minDiff) {
+                   minDiff = diff;
+                   hitIndex = j;
+                }
+            }
+        }
+        
+        if (hitIndex !== -1) {
+            const note = notes[hitIndex];
+            if (note.type === 'tap') {
+                notes.splice(hitIndex, 1);
+                currentScoreRef.current += (minDiff <= 25 ? 10 : 5);
+            } else if (note.type === 'hold') {
+                note.isActiveHold = true;
+                activeHolds[laneIndex] = note;
+                currentScoreRef.current += (minDiff <= 25 ? 10 : 5);
+            }
+            const s1 = document.getElementById('scoreDisplay');
+            const s2 = document.getElementById('scoreDisplayGame');
+            const val = currentScoreRef.current.toString().padStart(6, '0');
+            if (s1) s1.innerText = val;
+            if (s2) s2.innerText = val;
+        }
+    };
 
+    const triggerRelease = (laneIndex: number) => {
+        activeLanes[laneIndex] = false;
+        if (activeHolds[laneIndex]) {
+            const holdNote = activeHolds[laneIndex];
+            const idx = notes.indexOf(holdNote!);
+            if (idx !== -1) notes.splice(idx, 1);
+            activeHolds[laneIndex] = null;
+        }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key in keyMap) {
-        if (!activeLanes[keyMap[key]]) {
-          const lane = keyMap[key];
-          activeLanes[lane] = true;
-
-          const hitboxTolerance = 40;
-          for (let i = 0; i < notes.length; i++) {
-            const note = notes[i];
-            if (note.lane === lane && Math.abs(note.y - hitboxY) < hitboxTolerance) {
-              notes.splice(i, 1);
-              setScore((prev) => prev + 10);
-              break;
-            }
-          }
-        }
+        triggerHit(keyMap[key]);
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key in keyMap) {
-        activeLanes[keyMap[key]] = false;
+        triggerRelease(keyMap[key]);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown, { passive: false });
+    window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+
+    const touchLaneMap: Record<number, number> = {};
+
+    const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      if (!gameActiveRef.current) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const hwFactor = width / rect.width;
+      
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        const x = (touch.clientX - rect.left) * hwFactor; // x relative to canvas
+        const laneIndex = Math.floor(x / laneWidth);
+        
+        if (laneIndex >= 0 && laneIndex < 5) {
+          touchLaneMap[touch.identifier] = laneIndex;
+          triggerHit(laneIndex);
+        }
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        const laneIndex = touchLaneMap[touch.identifier];
+        if (laneIndex !== undefined) {
+          triggerRelease(laneIndex);
+          delete touchLaneMap[touch.identifier];
+        }
+      }
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
     // Start loop
     gameLoop();
 
     return () => {
       cancelAnimationFrame(animationId);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+      canvas.removeEventListener('touchcancel', handleTouchEnd);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       audioUploadElement?.removeEventListener('change', handleFileUpload);
@@ -278,109 +454,81 @@ export default function RhythmGame() {
   }, []);
 
   return (
-    <div className="min-h-screen w-full bg-[#050505] text-slate-100 flex items-center justify-center overflow-hidden font-sans relative">
+    <div className="min-h-screen w-full bg-[#050505] text-slate-100 flex items-center justify-center overflow-hidden font-sans p-4">
       {/* Background Ambient Glow */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-emerald-900/10 blur-[120px] rounded-full"></div>
         <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] bg-orange-900/10 blur-[120px] rounded-full"></div>
       </div>
 
-      {/* LOBBY UI */}
-      {gameState === 'lobby' && (
-        <div className="relative z-20 flex flex-col items-center gap-8 w-full max-w-sm">
-          <div className="text-center space-y-2">
-            <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 to-emerald-200 drop-shadow-sm uppercase">
-              Beat Pulse
-            </h1>
-            <p className="text-slate-400 text-xs uppercase tracking-[0.3em] font-bold">Web Audio Rhythm</p>
-          </div>
-
-          <div className="w-full p-8 bg-[#111] border border-white/5 rounded-2xl shadow-2xl space-y-6">
-            <div className="space-y-3">
-              <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block">Track Selection</label>
-              <div className="relative">
-                <input type="file" id="audioUpload" accept=".mp3" className="hidden" />
-                <label htmlFor="audioUpload" className="flex items-center justify-center w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-all text-sm font-medium">
-                  {isReady ? 'Upload Another MP3' : 'Import MP3'}
-                </label>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block">Difficulty</label>
-              <select 
-                value={difficulty}
-                onChange={(e) => {
-                  setDifficulty(e.target.value);
-                  difficultyRef.current = e.target.value;
-                }}
-                className="w-full px-4 py-3 bg-[#0c0c0c] border border-white/10 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
-                style={{ appearance: 'none' }}
-              >
-                <option value="easy">Easy</option>
-                <option value="normal">Normal</option>
-                <option value="hard">Hard</option>
-                <option value="expert">Expert</option>
-              </select>
-            </div>
-
-            <div className="space-y-3 pt-2 border-t border-white/5">
-              <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block">Controls</label>
-              <div className="grid grid-cols-5 gap-2">
-                {['A', 'S', 'J', 'K', 'L'].map((key, i) => {
-                  const colors = ['text-emerald-400 bg-emerald-500/20', 'text-red-400 bg-red-500/20', 'text-yellow-400 bg-yellow-500/20', 'text-blue-400 bg-blue-500/20', 'text-orange-400 bg-orange-500/20'];
-                  return (
-                    <div key={key} className={`w-10 h-10 mx-auto rounded border border-white/10 flex items-center justify-center text-sm font-bold ${colors[i]}`}>
-                      {key}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {isReady && (
-              <button
-                onClick={startGame}
-                className="w-full px-4 py-4 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all uppercase tracking-widest text-sm mt-4"
-              >
-                Play Now
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* GAME UI */}
-      <div className={`relative z-10 flex flex-col items-center transition-all duration-700 ${gameState === 'playing' ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none absolute'}`}>
-        
-        {/* Score Display Overlay */}
-        <div className="w-full max-w-[500px] flex justify-between items-center mb-4 px-2">
-          <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Score</span>
-            <div className="text-4xl font-black tracking-tighter text-white drop-shadow-md">
-              {score.toString().padStart(6, '0')}
-            </div>
-          </div>
+      <div className="relative w-full max-w-[500px] flex justify-center z-10 aspect-[5/6]">
+        <div className="relative w-full h-full shadow-2xl rounded-xl p-1 bg-gradient-to-b from-white/10 to-transparent flex flex-col">
           
-          <div className="px-3 py-1 bg-white/5 border border-white/10 rounded text-xs uppercase tracking-widest text-slate-400 font-bold">
-            {difficulty}
-          </div>
-        </div>
-
-        {/* Game Canvas Container */}
-        <div className="relative p-1 bg-gradient-to-b from-white/10 to-transparent rounded-xl shadow-2xl">
+          {/* Game Canvas Container */}
           <canvas
             ref={canvasRef}
             width={500}
             height={600}
-            className="bg-[#0c0c0c] rounded-lg block"
+            className="w-full h-auto bg-[#0c0c0c] rounded-lg block touch-none"
           />
           
-          {/* Overlaying UI elements for depth */}
-          <div className="absolute inset-0 pointer-events-none border border-white/5 rounded-lg shadow-inner"></div>
+          {/* Game UI Overlay */}
+          {gameState === 'game' && (
+            <div className="absolute top-4 left-4 right-4 flex justify-between pointer-events-none z-30">
+              <div id="scoreDisplayGame" className="text-3xl font-black tracking-tighter text-white drop-shadow-md">
+                000000
+              </div>
+            </div>
+          )}
+
+          {/* Lobby UI Overlay */}
+          {gameState === 'lobby' && (
+            <div className="absolute inset-0 bg-[#050505]/95 backdrop-blur-md rounded-lg flex flex-col items-center justify-center p-8 text-center z-40 border border-white/5">
+              <h1 className="text-5xl font-black tracking-tighter text-white mb-8 drop-shadow-lg">
+                BEAT<span className="text-emerald-500">SCAPE</span>
+              </h1>
+              
+              <div className="w-full space-y-6">
+                 <div className="space-y-3">
+                    <label className="text-xs uppercase tracking-widest text-slate-500 font-bold block">Track Selection</label>
+                    <div className="relative">
+                      <input type="file" id="audioUpload" accept=".mp3" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" />
+                      <div className="flex items-center justify-center w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg pointer-events-none transition-all text-sm font-medium text-white/90">
+                        {isReady ? 'Upload Another MP3' : 'Import MP3'}
+                      </div>
+                    </div>
+                 </div>
+                 
+                 <div className="space-y-3 relative z-20">
+                   <label className="text-xs uppercase tracking-widest text-slate-500 font-bold block">Difficulty</label>
+                   <select 
+                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500 appearance-none text-center font-medium cursor-pointer"
+                     value={difficulty}
+                     onChange={(e) => setDifficulty(e.target.value)}
+                   >
+                     <option value="easy" className="bg-[#111]">Easy</option>
+                     <option value="normal" className="bg-[#111]">Normal</option>
+                     <option value="hard" className="bg-[#111]">Hard</option>
+                     <option value="expert" className="bg-[#111]">Expert</option>
+                   </select>
+                 </div>
+
+                 {isReady && (
+                    <button
+                      onClick={startGame}
+                      className="w-full px-4 py-4 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all uppercase tracking-widest text-sm mt-6 z-20 relative active:scale-95"
+                    >
+                      Mulai Game
+                    </button>
+                  )}
+              </div>
+            </div>
+          )}
+
+          {/* Subtle Overlay Lines */}
+          <div className="absolute inset-0 pointer-events-none border border-white/5 rounded-lg shadow-inner z-20"></div>
         </div>
       </div>
     </div>
   );
 }
-
