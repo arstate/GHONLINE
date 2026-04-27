@@ -8,11 +8,27 @@ type Song = {
   title: string;
   type: 'remote' | 'local';
   url?: string;
+  stems?: {
+    vocals: string;
+    other: string; // guitar etc
+    drums: string;
+    bass: string;
+  };
   dbId?: number;
 };
 
 const defaultPlaylist: Song[] = [
-  { id: '1', title: "Ghea Indrawari - Teramini", type: 'remote', url: "https://ia600705.us.archive.org/4/items/ghea-indrawari-teramini-cover-damnt-rh-youtube/Ghea%20Indrawari%20-%20Teramini%20%28COVER%29%20-%20damnt_rh%20%28youtube%29.mp3" },
+  { 
+    id: '1', 
+    title: "Ghea Indrawari - Teramini (Multitrack)", 
+    type: 'remote', 
+    stems: {
+      vocals: "https://ia600702.us.archive.org/6/items/ghea-indrawari-teramini-cover-damnt-rh-youtube-vocals-ab-major-158bpm-441hz/Ghea%20Indrawari%20-%20Teramini%20%28COVER%29%20-%20damnt_rh%20%28youtube%29-vocals-Ab%20major-158bpm-441hz.mp3",
+      other: "https://ia600607.us.archive.org/1/items/ghea-indrawari-teramini-cover-damnt-rh-youtube-other-ab-major-158bpm-441hz/Ghea%20Indrawari%20-%20Teramini%20%28COVER%29%20-%20damnt_rh%20%28youtube%29-other-Ab%20major-158bpm-441hz.mp3",
+      drums: "https://ia903200.us.archive.org/31/items/ghea-indrawari-teramini-cover-damnt-rh-youtube-drums-ab-major-158bpm-441hz/Ghea%20Indrawari%20-%20Teramini%20%28COVER%29%20-%20damnt_rh%20%28youtube%29-drums-Ab%20major-158bpm-441hz.mp3",
+      bass: "https://ia601906.us.archive.org/12/items/ghea-indrawari-teramini-cover-damnt-rh-youtube-bass-ab-major-158bpm-441hz/Ghea%20Indrawari%20-%20Teramini%20%28COVER%29%20-%20damnt_rh%20%28youtube%29-bass-Ab%20major-158bpm-441hz.mp3"
+    } 
+  },
   { id: '2', title: "Dewi", type: 'remote', url: "https://ia601502.us.archive.org/20/items/dewi_20260427/Dewi.mp3" },
   { id: '3', title: "Threesixty - Dewi (Pop Punk Cover)", type: 'remote', url: "https://ia600104.us.archive.org/1/items/threesixty-dewi-pop-punk-cover-lyric-video/Threesixty%20-%20Dewi%EF%BD%9C%20Pop%20Punk%20Cover%20%28Lyric%20Video%29.mp3" },
   { id: '4', title: "Hindia - everything u are", type: 'remote', url: "https://ia601507.us.archive.org/4/items/hindia-everything-u-are/Hindia%20-%20everything%20u%20are.mp3" },
@@ -106,21 +122,24 @@ export default function RhythmGame() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [myMusicList, setMyMusicList] = useState<Song[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+  const [instrumentMode, setInstrumentMode] = useState<'all' | 'vocals' | 'other' | 'drums' | 'bass'>('all');
   const [isLoadingSong, setIsLoadingSong] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Audio and game state refs
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioBufferRef = useRef<AudioBuffer | null>(null);
-  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | { vocals: AudioBuffer, other: AudioBuffer, drums: AudioBuffer, bass: AudioBuffer } | null>(null);
+  const audioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const beatMapRef = useRef<any[]>([]);
   const spawnedIndexRef = useRef<number>(0);
   const gameActiveRef = useRef<boolean>(false);
   const startTimeRef = useRef<number>(0);
   const startGameRequestRef = useRef<boolean>(false);
   const difficultyRef = useRef('normal');
+  const instrumentModeRef = useRef<'all' | 'vocals' | 'other' | 'drums' | 'bass'>('all');
   
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
+  useEffect(() => { instrumentModeRef.current = instrumentMode; }, [instrumentMode]);
 
   useEffect(() => {
     const savedFavs = localStorage.getItem('rhythm_favorites');
@@ -159,24 +178,52 @@ export default function RhythmGame() {
     setIsLoadingSong(true);
     
     try {
-        let arrayBuffer: ArrayBuffer;
-        if (selectedSong.type === 'remote') {
-            const res = await fetch(selectedSong.url!);
-            arrayBuffer = await res.arrayBuffer();
-        } else {
-            arrayBuffer = await getSongBuffer(selectedSong.dbId!);
-        }
-
         if (!audioCtxRef.current) {
             audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         }
-        
-        const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
-        audioBufferRef.current = decodedBuffer;
+
+        let analyzeBuffer: AudioBuffer;
+
+        if (selectedSong.stems) {
+            const stems = selectedSong.stems;
+            const [vocRes, otherRes, drumRes, bassRes] = await Promise.all([
+               fetch(stems.vocals).then(r => r.arrayBuffer()),
+               fetch(stems.other).then(r => r.arrayBuffer()),
+               fetch(stems.drums).then(r => r.arrayBuffer()),
+               fetch(stems.bass).then(r => r.arrayBuffer())
+            ]);
+            
+            const [vocBuf, otherBuf, drumBuf, bassBuf] = await Promise.all([
+                audioCtxRef.current.decodeAudioData(vocRes),
+                audioCtxRef.current.decodeAudioData(otherRes),
+                audioCtxRef.current.decodeAudioData(drumRes),
+                audioCtxRef.current.decodeAudioData(bassRes)
+            ]);
+            
+            audioBufferRef.current = { vocals: vocBuf, other: otherBuf, drums: drumBuf, bass: bassBuf };
+            
+            if (instrumentMode === 'vocals') analyzeBuffer = vocBuf;
+            else if (instrumentMode === 'drums') analyzeBuffer = drumBuf;
+            else if (instrumentMode === 'bass') analyzeBuffer = bassBuf;
+            else analyzeBuffer = drumBuf; // For 'all' or 'other', drum or other is fine, let's use other for guitar mode. Wait, if it's 'all' maybe we just analyze drums anyway, or 'other' for guitar
+            if (instrumentMode === 'other') analyzeBuffer = otherBuf;
+            
+        } else {
+            let arrayBuffer: ArrayBuffer;
+            if (selectedSong.type === 'remote') {
+                const res = await fetch(selectedSong.url!);
+                arrayBuffer = await res.arrayBuffer();
+            } else {
+                arrayBuffer = await getSongBuffer(selectedSong.dbId!);
+            }
+            const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
+            audioBufferRef.current = decodedBuffer;
+            analyzeBuffer = decodedBuffer;
+        }
         
         // Step 17: Adaptive Multiband Beat Detection
         setIsAnalyzing(true);
-        await analyzeAndGenerateBeatMap(decodedBuffer, difficulty);
+        await analyzeAndGenerateBeatMap(analyzeBuffer!, difficulty);
         setIsAnalyzing(false);
         
         setSelectedSong(null);
@@ -696,32 +743,89 @@ export default function RhythmGame() {
           if (audioCtxRef.current.state === 'suspended') {
             audioCtxRef.current.resume();
           }
-          if (audioSourceRef.current) {
-             try { audioSourceRef.current.stop(); } catch(e) {}
+          if (audioSourcesRef.current && audioSourcesRef.current.length > 0) {
+             audioSourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
           }
-          const source = audioCtxRef.current.createBufferSource();
-          source.buffer = audioBufferRef.current;
+          audioSourcesRef.current = [];
           
-          const gainNode = audioCtxRef.current.createGain();
-          gainNode.gain.value = 1.0;
-          audioGainNodeRef.current = gainNode;
+          const audioBuffer = audioBufferRef.current;
+          const masterGainNode = audioCtxRef.current.createGain();
+          const targetVolume = 0.9;
           
-          // Audio Mastering: Dynamics Compressor (Auto Gain / Limiter)
-          const compressor = audioCtxRef.current.createDynamicsCompressor();
-          compressor.threshold.setValueAtTime(-24, audioCtxRef.current.currentTime);
-          compressor.knee.setValueAtTime(30, audioCtxRef.current.currentTime);
-          compressor.ratio.setValueAtTime(12, audioCtxRef.current.currentTime);
-          compressor.attack.setValueAtTime(0.003, audioCtxRef.current.currentTime);
-          compressor.release.setValueAtTime(0.25, audioCtxRef.current.currentTime);
-
-          source.connect(gainNode);
-          gainNode.connect(compressor);
-          compressor.connect(audioCtxRef.current.destination);
+          if (!('vocals' in audioBuffer)) {
+            // Single track mode
+            const source = audioCtxRef.current.createBufferSource();
+            source.buffer = audioBuffer as AudioBuffer;
+            
+            const channelData = source.buffer.getChannelData(0);
+            let maxPeak = 0;
+            for (let i = 0; i < channelData.length; i++) {
+                const absVal = Math.abs(channelData[i]);
+                if (absVal > maxPeak) maxPeak = absVal;
+            }
+            
+            masterGainNode.gain.value = maxPeak > 0 ? targetVolume / maxPeak : 1.0;
+            
+            const penaltyGainNode = audioCtxRef.current.createGain();
+            penaltyGainNode.gain.value = 1.0;
+            audioGainNodeRef.current = penaltyGainNode;
+            
+            source.connect(masterGainNode);
+            masterGainNode.connect(penaltyGainNode);
+            penaltyGainNode.connect(audioCtxRef.current.destination);
+            
+            audioSourcesRef.current.push(source);
+            
+            const startTime = audioCtxRef.current.currentTime;
+            source.start(startTime);
+            startTimeRef.current = startTime;
+          } else {
+            // Multitrack mode
+            const mode = instrumentModeRef.current;
+            const stems = ['vocals', 'other', 'drums', 'bass'] as const;
+            
+            masterGainNode.gain.value = 1.0; // overall mix safely kept flat if stems are pre-mixed
+            masterGainNode.connect(audioCtxRef.current.destination);
+            
+            const startTime = audioCtxRef.current.currentTime;
+            
+            stems.forEach(stem => {
+                const source = audioCtxRef.current!.createBufferSource();
+                source.buffer = (audioBuffer as any)[stem];
+                
+                const stemGain = audioCtxRef.current!.createGain();
+                stemGain.gain.value = 1.0;
+                
+                // Targeted penalty routing
+                if (
+                    (mode === 'vocals' && stem === 'vocals') ||
+                    (mode === 'other' && stem === 'other') ||
+                    (mode === 'drums' && stem === 'drums') ||
+                    (mode === 'bass' && stem === 'bass')
+                ) {
+                    audioGainNodeRef.current = stemGain;
+                }
+                
+                source.connect(stemGain);
+                stemGain.connect(masterGainNode);
+                
+                audioSourcesRef.current.push(source);
+                source.start(startTime); // Start synchronously
+            });
+            
+            // If mode is 'all', target the MasterGain for penalty
+            if (mode === 'all') {
+                 const allPenalty = audioCtxRef.current.createGain();
+                 allPenalty.gain.value = 1.0;
+                 masterGainNode.disconnect();
+                 masterGainNode.connect(allPenalty);
+                 allPenalty.connect(audioCtxRef.current.destination);
+                 audioGainNodeRef.current = allPenalty;
+            }
+            
+            startTimeRef.current = startTime;
+          }
           
-          source.start(0);
-          audioSourceRef.current = source;
-          
-          startTimeRef.current = audioCtxRef.current.currentTime;
           gameActiveRef.current = true;
         }
       }
@@ -747,7 +851,8 @@ export default function RhythmGame() {
         }
         
         if (audioBufferRef.current) {
-            const duration = audioBufferRef.current.duration;
+            const buf = audioBufferRef.current;
+            const duration = 'vocals' in buf ? buf.vocals.duration : buf.duration;
             const allSpawned = spawnedIndexRef.current >= beats.length;
             if (playbackTime > duration + 1.0 && allSpawned && notes.length === 0) {
                 handleGameEnd();
@@ -789,14 +894,18 @@ export default function RhythmGame() {
     audioUploadElement?.addEventListener('change', handleFileUpload);
 
     const triggerMiss = () => {
-        // Audio penalty: duck volume briefly to provide feedback for misses
+        // Audio penalty: mute targeted stem briefly to provide feedback for misses
         if (audioGainNodeRef.current && audioCtxRef.current) {
             const ctx = audioCtxRef.current;
             const now = ctx.currentTime;
+            
+            // If playing an isolated stem, mute it entirely. If 'all' or single track, just duck to 0.4
+            const duckVolume = instrumentModeRef.current === 'all' ? 0.4 : 0.0;
+            
             audioGainNodeRef.current.gain.cancelScheduledValues(now);
             audioGainNodeRef.current.gain.setValueAtTime(audioGainNodeRef.current.gain.value || 1.0, now);
-            audioGainNodeRef.current.gain.linearRampToValueAtTime(0.4, now + 0.05);
-            audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.4);
+            audioGainNodeRef.current.gain.linearRampToValueAtTime(duckVolume, now + 0.05);
+            audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.5);
         }
     };
 
@@ -1066,6 +1175,29 @@ export default function RhythmGame() {
                     ))}
                 </div>
 
+                {selectedSong.stems && (
+                  <div className="mb-8">
+                    <div className="text-emerald-500/80 font-bold tracking-widest text-xs uppercase mb-3">
+                        Target Instrument
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {(['all', 'vocals', 'other', 'drums', 'bass'] as const).map(inst => (
+                            <button
+                                key={inst}
+                                onClick={() => setInstrumentMode(inst)}
+                                className={`py-2 rounded-lg font-bold text-xs uppercase tracking-wide transition-all border ${
+                                    instrumentMode === inst 
+                                    ? 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.15)]' 
+                                    : 'border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 bg-neutral-950/50'
+                                }`}
+                            >
+                                {inst === 'other' ? 'Guitar/Keys' : inst}
+                            </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
                     <button 
                         onClick={() => setSelectedSong(null)}
@@ -1104,8 +1236,8 @@ export default function RhythmGame() {
                   onClick={() => {
                     setGameState('lobby');
                     gameStateRef.current = 'lobby';
-                    if (audioSourceRef.current) {
-                        try { audioSourceRef.current.stop(); } catch(e){}
+                    if (audioSourcesRef.current) {
+                        audioSourcesRef.current.forEach(s => { try { s.stop(); } catch(e){} });
                     }
                   }}
                   className="w-full px-6 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg uppercase tracking-wider transition-all backdrop-blur-md border border-white/5 active:scale-95"
