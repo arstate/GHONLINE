@@ -1,0 +1,6 @@
+{
+  "name": "Web Rhythm Game UI",
+  "description": "Step 6 of a rhythm game featuring a polished UI architecture with Lobby and Game states, difficulty selection affecting fall speed, and centralized layout mechanics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
