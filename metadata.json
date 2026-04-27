@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 8: Implemented Hold Notes mechanic with visual drawing, dynamic spawning probabilities based on difficulty, and sustained hit/score tracking logic. Decoupled game score rendering for 60fps performance.",
+  "description": "Step 11: Dynamic BPM detection from the parsed MP3 beatmap. The game speed (note falling velocity) accurately calculates from the detected BPM instead of arbitrary difficulty thresholds, and a live BPM meter is added into the game HUD.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

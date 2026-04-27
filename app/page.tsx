@@ -7,7 +7,12 @@ export default function RhythmGame() {
   const [score, setScore] = useState(0); // keep for lobby if needed
   const currentScoreRef = useRef(0);
   const [isReady, setIsReady] = useState(false);
-  const [gameState, setGameState] = useState<'lobby' | 'game'>('lobby');
+  const [gameState, setGameState] = useState<'lobby' | 'countdown' | 'game' | 'postgame'>('lobby');
+  const [bpm, setBpm] = useState<number>(0);
+  const bpmRef = useRef<number>(0);
+  const gameStateRef = useRef<'lobby' | 'countdown' | 'game' | 'postgame'>('lobby');
+  const countdownRef = useRef<number | null>(null);
+  const audioGainNodeRef = useRef<GainNode | null>(null);
   const [difficulty, setDifficulty] = useState('normal');
 
   // Audio and game state refs
@@ -24,8 +29,26 @@ export default function RhythmGame() {
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
 
   const startGame = () => {
-    setGameState('game');
-    startGameRequestRef.current = true;
+    setGameState('countdown');
+    gameStateRef.current = 'countdown';
+    countdownRef.current = 5;
+    
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+
+    let count = 5;
+    const interval = setInterval(() => {
+      count -= 1;
+      countdownRef.current = count;
+      if (count < 0) {
+          clearInterval(interval);
+          setGameState('game');
+          gameStateRef.current = 'game';
+          countdownRef.current = null;
+          startGameRequestRef.current = true;
+      }
+    }, 1000);
   };
 
 
@@ -46,13 +69,9 @@ export default function RhythmGame() {
     };
     const activeLanes = [false, false, false, false, false];
 
-    const getSpeed = (diff: string) => {
-      switch (diff) {
-        case 'easy': return 2.5;
-        case 'hard': return 6;
-        case 'expert': return 8;
-        default: return 4; // normal
-      }
+    const getSpeed = () => {
+      const currentBpm = bpmRef.current || 120;
+      return Math.max(3, Math.min(currentBpm / 24, 12));
     };
 
     class Note {
@@ -100,10 +119,10 @@ export default function RhythmGame() {
                activeHolds[note.lane] = null;
            }
         } else {
-           if (note.type === 'hold' && note.y - note.length > height) {
+           if (note.y > hitboxY + 55) {
+               triggerMiss();
                notes.splice(i, 1);
-           } else if (note.type === 'tap' && note.y > height) {
-               notes.splice(i, 1);
+               continue;
            }
         }
       }
@@ -209,6 +228,46 @@ export default function RhythmGame() {
       ctx.moveTo(0, hitboxY + 40);
       ctx.lineTo(width, hitboxY + 40);
       ctx.stroke();
+
+      if (gameStateRef.current === 'countdown') {
+          const txt = countdownRef.current === 0 ? "GO!" : (countdownRef.current?.toString() || "");
+          if (txt) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 120px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = '#10b981';
+            ctx.fillText(txt, width / 2, height / 2);
+            ctx.shadowBlur = 0;
+          }
+      }
+    };
+
+    const handleGameEnd = () => {
+        if (gameStateRef.current === 'postgame') return;
+        gameActiveRef.current = false;
+        setGameState('postgame');
+        gameStateRef.current = 'postgame';
+        setScore(currentScoreRef.current);
+        
+        if (!audioCtxRef.current) return;
+        const ctx = audioCtxRef.current;
+        const victoryNotes = [523.25, 659.25, 783.99, 1046.50];
+        victoryNotes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            const scheduleTime = ctx.currentTime + (idx * 0.15);
+            gain.gain.setValueAtTime(0, scheduleTime);
+            gain.gain.linearRampToValueAtTime(0.3, scheduleTime + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.01, scheduleTime + 0.3);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(scheduleTime);
+            osc.stop(scheduleTime + 0.3);
+        });
     };
 
     const gameLoop = () => {
@@ -249,7 +308,7 @@ export default function RhythmGame() {
               let availableLanes = [0,1,2,3,4];
               
               // Only determining `speed` dynamically for `hold` length.
-              const spd = getSpeed(diff);
+              const spd = getSpeed();
               
               for(let n=0; n<numNotes; n++) {
                   if (availableLanes.length === 0) break;
@@ -266,7 +325,20 @@ export default function RhythmGame() {
             }
           }
           beatMapRef.current = beatMap;
-          console.log(`Generated ${beatMap.length} beats for ${diff} mode`);
+          
+          let validIntervals: number[] = [];
+          for (let j = 1; j < beatMap.length; j++) {
+              const bDiff = beatMap[j].time - beatMap[j-1].time;
+              if (bDiff > 0.2 && bDiff < 2.0) { // Valid roughly between 30 and 300 BPM
+                  validIntervals.push(bDiff);
+              }
+          }
+          const avgInterval = validIntervals.length > 0 ? validIntervals.reduce((a,b)=>a+b, 0) / validIntervals.length : 0.5;
+          const calculatedBpm = Math.round(60 / avgInterval);
+          setBpm(calculatedBpm);
+          bpmRef.current = calculatedBpm;
+          
+          console.log(`Generated ${beatMap.length} beats for ${diff} mode. Estimated BPM: ${calculatedBpm}`);
         }
 
         if (audioCtxRef.current && audioBufferRef.current) {
@@ -278,7 +350,14 @@ export default function RhythmGame() {
           }
           const source = audioCtxRef.current.createBufferSource();
           source.buffer = audioBufferRef.current;
-          source.connect(audioCtxRef.current.destination);
+          
+          const gainNode = audioCtxRef.current.createGain();
+          gainNode.gain.value = 1.0;
+          audioGainNodeRef.current = gainNode;
+          
+          source.connect(gainNode);
+          gainNode.connect(audioCtxRef.current.destination);
+          
           source.start(0);
           audioSourceRef.current = source;
           
@@ -287,7 +366,7 @@ export default function RhythmGame() {
         }
       }
 
-      const currentSpeed = getSpeed(difficultyRef.current);
+      const currentSpeed = getSpeed();
 
       if (gameActiveRef.current && audioCtxRef.current) {
         const playbackTime = audioCtxRef.current.currentTime - startTimeRef.current;
@@ -307,9 +386,19 @@ export default function RhythmGame() {
              break;
           }
         }
+        
+        if (audioBufferRef.current) {
+            const duration = audioBufferRef.current.duration;
+            const allSpawned = spawnedIndexRef.current >= beats.length;
+            if (playbackTime > duration + 1.0 && allSpawned && notes.length === 0) {
+                handleGameEnd();
+            }
+        }
       }
 
-      update();
+      if (gameStateRef.current === 'game') {
+          update();
+      }
       draw();
       animationId = requestAnimationFrame(gameLoop);
     };
@@ -339,6 +428,10 @@ export default function RhythmGame() {
 
     const audioUploadElement = document.getElementById('audioUpload');
     audioUploadElement?.addEventListener('change', handleFileUpload);
+
+    const triggerMiss = () => {
+        // Audio penalty removed per user request.
+    };
 
     const triggerHit = (laneIndex: number) => {
         if (activeLanes[laneIndex]) return;
@@ -372,6 +465,10 @@ export default function RhythmGame() {
             const val = currentScoreRef.current.toString().padStart(6, '0');
             if (s1) s1.innerText = val;
             if (s2) s2.innerText = val;
+        } else {
+            if (gameStateRef.current === 'game') {
+                triggerMiss();
+            }
         }
     };
 
@@ -380,7 +477,14 @@ export default function RhythmGame() {
         if (activeHolds[laneIndex]) {
             const holdNote = activeHolds[laneIndex];
             const idx = notes.indexOf(holdNote!);
-            if (idx !== -1) notes.splice(idx, 1);
+            if (idx !== -1) {
+                if (holdNote!.y - holdNote!.length > hitboxY - 25) {
+                    // Valid early finish (tolerance)
+                } else {
+                    triggerMiss();
+                }
+                notes.splice(idx, 1);
+            }
             activeHolds[laneIndex] = null;
         }
     };
@@ -473,10 +577,13 @@ export default function RhythmGame() {
           />
           
           {/* Game UI Overlay */}
-          {gameState === 'game' && (
+          {(gameState === 'game' || gameState === 'countdown') && (
             <div className="absolute top-4 left-4 right-4 flex justify-between pointer-events-none z-30">
               <div id="scoreDisplayGame" className="text-3xl font-black tracking-tighter text-white drop-shadow-md">
                 000000
+              </div>
+              <div className="text-sm font-bold tracking-widest text-emerald-400 drop-shadow-md mt-1">
+                BPM: {bpm}
               </div>
             </div>
           )}
@@ -521,6 +628,36 @@ export default function RhythmGame() {
                       Mulai Game
                     </button>
                   )}
+              </div>
+            </div>
+          )}
+
+          {/* Post-Game UI Overlay */}
+          {gameState === 'postgame' && (
+            <div className="absolute inset-0 bg-[#050505]/90 backdrop-blur-md flex flex-col items-center justify-center z-50 text-center rounded-lg border border-white/10 p-8">
+              <h2 className="text-3xl font-black text-white mb-2 tracking-widest uppercase">Your Score</h2>
+              <div className="text-6xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-8">
+                {score.toString().padStart(6, '0')}
+              </div>
+              <div className="flex flex-col gap-4 w-full">
+                <button 
+                  onClick={startGame}
+                  className="w-full px-6 py-4 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black rounded-lg uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95"
+                >
+                  Replay
+                </button>
+                <button 
+                  onClick={() => {
+                    setGameState('lobby');
+                    gameStateRef.current = 'lobby';
+                    if (audioSourceRef.current) {
+                        try { audioSourceRef.current.stop(); } catch(e){}
+                    }
+                  }}
+                  className="w-full px-6 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg uppercase tracking-wider transition-all backdrop-blur-md border border-white/5 active:scale-95"
+                >
+                  Back to Lobby
+                </button>
               </div>
             </div>
           )}
