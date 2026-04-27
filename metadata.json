@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 18: Integrated a full Multitrack Audio Engine with true Stems support. Features Targeted Auto-Beat that precisely isolates peak detection to the selected instrument track, perfectly synchronized synchronous multi-source playback, and Targeted Penalty Routing that mutes only the user's selected instrument exactly like Guitar Hero.",
+  "description": "Step 20: Horizon distance fade effect. Added a linear gradient overlay over the far edge of the lane, making incoming notes fade into view smoothly rather than abruptly popping into existence.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

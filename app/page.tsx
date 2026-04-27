@@ -314,6 +314,10 @@ export default function RhythmGame() {
 
     let lastPeakTime = -cooldownSecs;
 
+    // Lane Availability Tracker (Step 19)
+    let laneFreeTime = [0, 0, 0, 0, 0];
+    const minGap = 0.2; 
+
     // We calculate Flux (rate of change) in energy
     let localFluxSum = 0;
     const fluxHistory: number[] = [];
@@ -358,7 +362,15 @@ export default function RhythmGame() {
             else if ((currentDiff === 'hard' || currentDiff === 'expert') && flux > dynamicThreshold * 1.4) numNotes = 2;
 
             const spdZ = 120 * 200 / 24; 
-            let availableLanes = [0, 1, 2, 3, 4];
+            
+            // Step 19: Validasi Pemilihan Lajur (Hanya lajur yang bebas/kosong)
+            let availableLanes = [0, 1, 2, 3, 4].filter(l => currentTime >= laneFreeTime[l]);
+            
+            // Skip jika Penuh: Semua lajur sibuk
+            if (availableLanes.length === 0) continue;
+            
+            // Pastikan kita tidak meminta lebih banyak nada dari lajur yang tersedia
+            numNotes = Math.min(numNotes, availableLanes.length);
 
             for (let n = 0; n < numNotes; n++) {
                 if (availableLanes.length === 0) break;
@@ -377,12 +389,20 @@ export default function RhythmGame() {
 
                 availableLanes = availableLanes.filter(l => l !== lane);
                 const isHold = n === 0 && Math.random() < holdProb;
-                const lengthZ = isHold ? (spdZ * (0.3 + Math.random() * 0.7)) : 0;
+                
+                const holdDurationSecs = isHold ? (0.3 + Math.random() * 0.7) : 0;
+                const lengthZ = holdDurationSecs * spdZ;
+                
+                // Update Tracker
+                laneFreeTime[lane] = currentTime + holdDurationSecs + minGap;
+
                 beatNotes.push({ lane, type: isHold ? 'hold' : 'tap', lengthZ });
             }
 
-            beatMap.push({ time: currentTime, notes: beatNotes });
-            lastPeakTime = currentTime;
+            if (beatNotes.length > 0) {
+                beatMap.push({ time: currentTime, notes: beatNotes });
+                lastPeakTime = currentTime;
+            }
         }
     }
 
@@ -676,6 +696,16 @@ export default function RhythmGame() {
         ctx.strokeStyle = note.missed ? '#aaaaaa' : '#fff';
         ctx.stroke();
       }
+
+      // Smooth Horizon Fade (Distance Fade)
+      const horizonY = getScreenY(START_Z);
+      const fadeGrad = ctx.createLinearGradient(0, horizonY - 50, 0, horizonY + 200);
+      fadeGrad.addColorStop(0, '#050505');
+      fadeGrad.addColorStop(0.3, '#050505'); // Ensure the sharp cut is completely covered
+      fadeGrad.addColorStop(1, 'rgba(5, 5, 5, 0)');
+      
+      ctx.fillStyle = fadeGrad;
+      ctx.fillRect(0, 0, width, horizonY + 200);
 
       if (gameStateRef.current === 'countdown') {
           const txt = countdownRef.current === 0 ? "GO!" : (countdownRef.current?.toString() || "");
