@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 16: Implemented Advanced Audio Processing with Dynamics Mastering (Compressor/Limiter) for consistent loudness and clarity. Integrated a temporary audio ducking 'Miss Penalty' effect for enhanced gameplay feedback.",
+  "description": "Step 17 Final: Overhauled Adaptive Multiband Beat Detection with Spectral Flux (Onset Detection) to flawlessly capture acoustic and pop tracks, while maintaining Dynamic Moving Average thresholds for dense Metal mixes. Replaced naive average BPM detection with an Interval Histogram Mode clustering. Added Tulus - Andai Aku Bisa (Chrisye Cover).",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

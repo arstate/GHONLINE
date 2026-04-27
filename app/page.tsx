@@ -18,7 +18,8 @@ const defaultPlaylist: Song[] = [
   { id: '4', title: "Hindia - everything u are", type: 'remote', url: "https://ia601507.us.archive.org/4/items/hindia-everything-u-are/Hindia%20-%20everything%20u%20are.mp3" },
   { id: '5', title: ".Feast - Nina", type: 'remote', url: "https://ia600704.us.archive.org/33/items/feast-nina-official-lyric-video/Feast%20-%20Nina%20%28Official%20Lyric%20Video%29.mp3" },
   { id: '6', title: "Sampai Nanti - Threesixty Skatepunk", type: 'remote', url: "https://ia600900.us.archive.org/13/items/sampai-nanti-threesixty-skatepunk/Sampai%20Nanti%20-%20Threesixty%20Skatepunk.mp3" },
-  { id: '7', title: "DRAGONFORCE - Through the Fire and Flames", type: 'remote', url: "https://ia600909.us.archive.org/35/items/dragonforce-through-the-fire-and-flames-official-video-dragon-force-youtube/DRAGONFORCE%20-%20Through%20the%20Fire%20and%20Flames%20%28Official%20Video%29%20-%20DragonForce%20%28youtube%29.mp3" }
+  { id: '7', title: "DRAGONFORCE - Through the Fire and Flames", type: 'remote', url: "https://ia600909.us.archive.org/35/items/dragonforce-through-the-fire-and-flames-official-video-dragon-force-youtube/DRAGONFORCE%20-%20Through%20the%20Fire%20and%20Flames%20%28Official%20Video%29%20-%20DragonForce%20%28youtube%29.mp3" },
+  { id: '8', title: "Tulus - Andai Aku Bisa (Chrisye Cover)", type: 'remote', url: "https://ia601600.us.archive.org/11/items/tulus-andai-aku-bisa-chrisye-cover-lirik-vero-april-youtube/Tulus%20-%20Andai%20Aku%20Bisa%20%28Chrisye%20Cover%29%20%20Lirik%20-%20Vero%20April%20%28youtube%29.mp3" }
 ];
 
 const DB_NAME = 'RhythmGameDB';
@@ -196,25 +197,23 @@ export default function RhythmGame() {
 
     const merger = offlineCtx.createChannelMerger(3);
 
-    // Low Band Filter (< 150Hz) - Bass/Kick
+    // Filter setup
     const lp = offlineCtx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = 150;
     source.connect(lp);
     lp.connect(merger, 0, 0);
 
-    // Mid Band Filter (150Hz - 2500Hz) - Snare/Guitar/Vocals
     const bp = offlineCtx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = 1325;
+    bp.frequency.value = 1300;
     bp.Q.value = 0.5;
     source.connect(bp);
     bp.connect(merger, 0, 1);
 
-    // High Band Filter (> 2500Hz) - Cymbals
     const hp = offlineCtx.createBiquadFilter();
     hp.type = 'highpass';
-    hp.frequency.value = 2500;
+    hp.frequency.value = 3000;
     source.connect(hp);
     hp.connect(merger, 0, 2);
 
@@ -224,72 +223,111 @@ export default function RhythmGame() {
     const renderedBuffer = await offlineCtx.startRendering();
     const lowData = renderedBuffer.getChannelData(0);
     const midData = renderedBuffer.getChannelData(1);
-    // highData if needed, but the prompt focuses on Low/Mid for genre check
+    const highData = renderedBuffer.getChannelData(2);
 
-    // Energy analysis (Genre Check)
+    // 1. Normalization: Make sure the signals are consistent
+    const normalize = (data: Float32Array) => {
+        let max = 0;
+        for (let i = 0; i < data.length; i++) {
+            const val = Math.abs(data[i]);
+            if (val > max) max = val;
+        }
+        if (max > 0) {
+            for (let i = 0; i < data.length; i++) data[i] /= max;
+        }
+    };
+    normalize(lowData);
+    normalize(midData);
+    normalize(highData);
+
+    // 2. Genre Analysis
     let lowEnergy = 0;
     let midEnergy = 0;
-    const sampleStep = Math.floor(buffer.sampleRate / 10); // Sample every 0.1s for energy
-    for (let i = 0; i < lowData.length; i += sampleStep) {
+    const energyStep = Math.floor(buffer.sampleRate / 2); // Check every 0.5s
+    for (let i = 0; i < lowData.length; i += energyStep) {
         lowEnergy += Math.abs(lowData[i]);
         midEnergy += Math.abs(midData[i]);
     }
-    
-    // Rock if Mid energy is high compared to Low (Guitar density)
-    const isRock = midEnergy > (lowEnergy * 0.7);
-    console.log(`Genre check: ${isRock ? "Rock/High-Density Mid" : "Pop/Acoustic Low-Dominant"}`);
+    const isRock = midEnergy > (lowEnergy * 0.65);
+    console.log(`Step 17 Analytics - Genre: ${isRock ? "Rock/Metal" : "Pop/Acoustic"}, Mid/Low Ratio: ${(midEnergy/lowEnergy).toFixed(2)}`);
 
-    // Peak Detection
+    // 3. Peak Detection with Spectral Flux and Dynamic Threshold
     const beatMap: any[] = [];
     const sampleRate = buffer.sampleRate;
+    const sampleWindow = 512;
+    const windowSeconds = 1.5; 
+    const windowSamples = Math.floor(windowSeconds * sampleRate / sampleWindow);
     
-    let threshold = 0.4;
-    let cooldownSecs = 0.2;
+    // Config based on difficulty
+    let sensitivity = 1.35; // Flux sensitivity multiplier vs moving average
+    let cooldownSecs = 0.22;
     let holdProb = 0.1;
     
-    if (currentDiff === 'easy') { threshold = 0.6; cooldownSecs = 0.4; holdProb = 0.05; }
-    else if (currentDiff === 'hard') { threshold = 0.3; cooldownSecs = 0.15; holdProb = 0.25; }
-    else if (currentDiff === 'expert') { threshold = 0.2; cooldownSecs = 0.1; holdProb = 0.4; }
+    if (currentDiff === 'easy') { sensitivity = 1.8; cooldownSecs = 0.45; holdProb = 0.05; }
+    else if (currentDiff === 'hard') { sensitivity = 1.25; cooldownSecs = 0.16; holdProb = 0.25; }
+    else if (currentDiff === 'expert') { sensitivity = 1.15; cooldownSecs = 0.12; holdProb = 0.4; }
 
     let lastPeakTime = -cooldownSecs;
 
-    // Use Mid data for Rock, Low data for Acoustic
-    const analysisData = isRock ? midData : lowData;
+    // We calculate Flux (rate of change) in energy
+    let localFluxSum = 0;
+    const fluxHistory: number[] = [];
     
-    // For smart lane mapping, we also check the other band at peak time
-    for (let i = 0; i < analysisData.length; i += 512) {
-        const val = Math.abs(analysisData[i]);
+    const analysisData = isRock ? midData : lowData;
+    let prevEnergy = 0;
+
+    for (let i = 0; i < analysisData.length; i += sampleWindow) {
+        // Calculate Energy for this small window
+        let sum = 0;
+        let limit = Math.min(i + sampleWindow, analysisData.length);
+        for(let j = i; j < limit; j++) {
+            sum += Math.abs(analysisData[j]);
+        }
+        const currentEnergy = sum / (limit - i);
+        
+        // Spectral Flux (only positive changes)
+        const flux = Math.max(0, currentEnergy - prevEnergy);
+        prevEnergy = currentEnergy;
+
         const currentTime = i / sampleRate;
 
-        if (val > threshold && (currentTime - lastPeakTime) > cooldownSecs) {
-            const lowValAtPeak = Math.abs(lowData[i]);
-            const midValAtPeak = Math.abs(midData[i]);
-            
-            // Smart Lane Mapping:
-            // Low intensity -> Outer lanes (0, 4)
-            // Mid intensity -> Inner lanes (1, 2, 3)
+        // Maintain moving average of Flux
+        fluxHistory.push(flux);
+        localFluxSum += flux;
+        if (fluxHistory.length > windowSamples) {
+            localFluxSum -= fluxHistory.shift()!;
+        }
+
+        const localFluxAvg = localFluxSum / fluxHistory.length;
+        const dynamicThreshold = localFluxAvg * sensitivity;
+
+        // Strict peak detection: flux is higher than neighboring average + absolute minimum floor
+        if (flux > dynamicThreshold && flux > 0.005 && (currentTime - lastPeakTime) > cooldownSecs) {
+            const lowVal = Math.abs(lowData[i]);
+            const midVal = Math.abs(midData[i]);
             
             const beatNotes = [];
             let numNotes = 1;
-            if (currentDiff === 'expert' && val > threshold * 2) numNotes = (val > threshold * 3) ? 3 : 2;
-            else if (currentDiff === 'hard' && val > threshold * 2) numNotes = 2;
+            // Expert/Hard can have double/triple notes on very high spikes
+            if (currentDiff === 'expert' && flux > dynamicThreshold * 1.8) numNotes = 3;
+            else if ((currentDiff === 'hard' || currentDiff === 'expert') && flux > dynamicThreshold * 1.4) numNotes = 2;
 
-            const spdZ = 120 * 200 / 24; // Base speed approx
-            
+            const spdZ = 120 * 200 / 24; 
             let availableLanes = [0, 1, 2, 3, 4];
+
             for (let n = 0; n < numNotes; n++) {
                 if (availableLanes.length === 0) break;
                 
-                // Frequency-to-Lane logic
+                // Smart Lane Mapping
                 let lane;
-                if (lowValAtPeak > midValAtPeak * 1.5) {
-                    // Low dominant at this peak -> Prefer outer
-                    const outerLanes = availableLanes.filter(l => l === 0 || l === 4);
-                    lane = outerLanes.length > 0 ? outerLanes[Math.floor(Math.random() * outerLanes.length)] : availableLanes[Math.floor(Math.random() * availableLanes.length)];
+                if (lowVal > midVal * 1.2) {
+                    // Kick/Bass -> Outer
+                    const outer = availableLanes.filter(l => l === 0 || l === 4);
+                    lane = outer.length > 0 ? outer[Math.floor(Math.random() * outer.length)] : availableLanes[Math.floor(Math.random() * availableLanes.length)];
                 } else {
-                    // Mid dominant or balanced -> Prefer inner
-                    const innerLanes = availableLanes.filter(l => l === 1 || l === 2 || l === 3);
-                    lane = innerLanes.length > 0 ? innerLanes[Math.floor(Math.random() * innerLanes.length)] : availableLanes[Math.floor(Math.random() * availableLanes.length)];
+                    // Snare/Lead -> Inner
+                    const inner = availableLanes.filter(l => l === 1 || l === 2 || l === 3);
+                    lane = inner.length > 0 ? inner[Math.floor(Math.random() * inner.length)] : availableLanes[Math.floor(Math.random() * availableLanes.length)];
                 }
 
                 availableLanes = availableLanes.filter(l => l !== lane);
@@ -298,23 +336,47 @@ export default function RhythmGame() {
                 beatNotes.push({ lane, type: isHold ? 'hold' : 'tap', lengthZ });
             }
 
-            beatMap.push({ time: currentTime, energy: val, notes: beatNotes });
+            beatMap.push({ time: currentTime, notes: beatNotes });
             lastPeakTime = currentTime;
         }
     }
 
     beatMapRef.current = beatMap;
-
-    // Estimate BPM
-    let validIntervals: number[] = [];
+    
+    // 4. BPM Calculation using Histogram Mode (Clustering)
+    let intervals: number[] = [];
     for (let j = 1; j < beatMap.length; j++) {
-        const bDiff = beatMap[j].time - beatMap[j-1].time;
-        if (bDiff > 0.2 && bDiff < 1.0) validIntervals.push(bDiff);
+        const interval = beatMap[j].time - beatMap[j-1].time;
+        // only consider sensible intervals for BPM (e.g., 60-200 BPM is 0.3s to 1s)
+        if (interval > 0.25 && interval < 1.0) {
+            intervals.push(interval);
+        }
     }
-    const avgInterval = validIntervals.length > 0 ? validIntervals.reduce((a,b)=>a+b, 0) / validIntervals.length : 0.5;
-    const calculatedBpm = Math.round(60 / avgInterval);
+    
+    let calculatedBpm = 120; // fallback
+    if (intervals.length > 0) {
+        // Group into bins (e.g. 0.05s precision)
+        const bins: Record<string, number> = {};
+        for (const interval of intervals) {
+            // round to nearest 0.05
+            const binKey = (Math.round(interval * 20) / 20).toFixed(2);
+            bins[binKey] = (bins[binKey] || 0) + 1;
+        }
+        
+        let maxCount = 0;
+        let modeInterval = 0.5;
+        for (const [key, count] of Object.entries(bins)) {
+            if (count > maxCount) {
+                maxCount = count;
+                modeInterval = parseFloat(key);
+            }
+        }
+        calculatedBpm = Math.round(60 / modeInterval);
+    }
+    
     setBpm(calculatedBpm);
     bpmRef.current = calculatedBpm;
+    console.log(`Estimated BPM: ${calculatedBpm} via mode interval clustering.`);
   };
 
   const startGame = () => {
