@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 12: Expanded canvas vertical viewing area for better note visibility, removed dynamic BPM detection, and locked speed scaling to a static 158-180 BPM range based directly on difficulty.",
+  "description": "Step 16: Expanded the default playlist with several new tracks (Dewi, Hindia, .Feast, Threesixty, DragonForce) while maintaining all 3D perspective and visual feedback features.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
