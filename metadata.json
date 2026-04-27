@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 16: Expanded the default playlist with several new tracks (Dewi, Hindia, .Feast, Threesixty, DragonForce) while maintaining all 3D perspective and visual feedback features.",
+  "description": "Step 16: Implemented Advanced Audio Processing with Dynamics Mastering (Compressor/Limiter) for consistent loudness and clarity. Integrated a temporary audio ducking 'Miss Penalty' effect for enhanced gameplay feedback.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

@@ -106,6 +106,7 @@ export default function RhythmGame() {
   const [myMusicList, setMyMusicList] = useState<Song[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isLoadingSong, setIsLoadingSong] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Audio and game state refs
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -172,14 +173,148 @@ export default function RhythmGame() {
         const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
         audioBufferRef.current = decodedBuffer;
         
+        // Step 17: Adaptive Multiband Beat Detection
+        setIsAnalyzing(true);
+        await analyzeAndGenerateBeatMap(decodedBuffer, difficulty);
+        setIsAnalyzing(false);
+        
         setSelectedSong(null);
         startGame();
     } catch (err) {
         console.error("Failed to load song", err);
         alert("Failed to load song. Please try another.");
+        setIsAnalyzing(false);
     } finally {
         setIsLoadingSong(false);
     }
+  };
+
+  const analyzeAndGenerateBeatMap = async (buffer: AudioBuffer, currentDiff: string) => {
+    const offlineCtx = new OfflineAudioContext(3, buffer.length, buffer.sampleRate);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = buffer;
+
+    const merger = offlineCtx.createChannelMerger(3);
+
+    // Low Band Filter (< 150Hz) - Bass/Kick
+    const lp = offlineCtx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 150;
+    source.connect(lp);
+    lp.connect(merger, 0, 0);
+
+    // Mid Band Filter (150Hz - 2500Hz) - Snare/Guitar/Vocals
+    const bp = offlineCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1325;
+    bp.Q.value = 0.5;
+    source.connect(bp);
+    bp.connect(merger, 0, 1);
+
+    // High Band Filter (> 2500Hz) - Cymbals
+    const hp = offlineCtx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 2500;
+    source.connect(hp);
+    hp.connect(merger, 0, 2);
+
+    merger.connect(offlineCtx.destination);
+    source.start();
+
+    const renderedBuffer = await offlineCtx.startRendering();
+    const lowData = renderedBuffer.getChannelData(0);
+    const midData = renderedBuffer.getChannelData(1);
+    // highData if needed, but the prompt focuses on Low/Mid for genre check
+
+    // Energy analysis (Genre Check)
+    let lowEnergy = 0;
+    let midEnergy = 0;
+    const sampleStep = Math.floor(buffer.sampleRate / 10); // Sample every 0.1s for energy
+    for (let i = 0; i < lowData.length; i += sampleStep) {
+        lowEnergy += Math.abs(lowData[i]);
+        midEnergy += Math.abs(midData[i]);
+    }
+    
+    // Rock if Mid energy is high compared to Low (Guitar density)
+    const isRock = midEnergy > (lowEnergy * 0.7);
+    console.log(`Genre check: ${isRock ? "Rock/High-Density Mid" : "Pop/Acoustic Low-Dominant"}`);
+
+    // Peak Detection
+    const beatMap: any[] = [];
+    const sampleRate = buffer.sampleRate;
+    
+    let threshold = 0.4;
+    let cooldownSecs = 0.2;
+    let holdProb = 0.1;
+    
+    if (currentDiff === 'easy') { threshold = 0.6; cooldownSecs = 0.4; holdProb = 0.05; }
+    else if (currentDiff === 'hard') { threshold = 0.3; cooldownSecs = 0.15; holdProb = 0.25; }
+    else if (currentDiff === 'expert') { threshold = 0.2; cooldownSecs = 0.1; holdProb = 0.4; }
+
+    let lastPeakTime = -cooldownSecs;
+
+    // Use Mid data for Rock, Low data for Acoustic
+    const analysisData = isRock ? midData : lowData;
+    
+    // For smart lane mapping, we also check the other band at peak time
+    for (let i = 0; i < analysisData.length; i += 512) {
+        const val = Math.abs(analysisData[i]);
+        const currentTime = i / sampleRate;
+
+        if (val > threshold && (currentTime - lastPeakTime) > cooldownSecs) {
+            const lowValAtPeak = Math.abs(lowData[i]);
+            const midValAtPeak = Math.abs(midData[i]);
+            
+            // Smart Lane Mapping:
+            // Low intensity -> Outer lanes (0, 4)
+            // Mid intensity -> Inner lanes (1, 2, 3)
+            
+            const beatNotes = [];
+            let numNotes = 1;
+            if (currentDiff === 'expert' && val > threshold * 2) numNotes = (val > threshold * 3) ? 3 : 2;
+            else if (currentDiff === 'hard' && val > threshold * 2) numNotes = 2;
+
+            const spdZ = 120 * 200 / 24; // Base speed approx
+            
+            let availableLanes = [0, 1, 2, 3, 4];
+            for (let n = 0; n < numNotes; n++) {
+                if (availableLanes.length === 0) break;
+                
+                // Frequency-to-Lane logic
+                let lane;
+                if (lowValAtPeak > midValAtPeak * 1.5) {
+                    // Low dominant at this peak -> Prefer outer
+                    const outerLanes = availableLanes.filter(l => l === 0 || l === 4);
+                    lane = outerLanes.length > 0 ? outerLanes[Math.floor(Math.random() * outerLanes.length)] : availableLanes[Math.floor(Math.random() * availableLanes.length)];
+                } else {
+                    // Mid dominant or balanced -> Prefer inner
+                    const innerLanes = availableLanes.filter(l => l === 1 || l === 2 || l === 3);
+                    lane = innerLanes.length > 0 ? innerLanes[Math.floor(Math.random() * innerLanes.length)] : availableLanes[Math.floor(Math.random() * availableLanes.length)];
+                }
+
+                availableLanes = availableLanes.filter(l => l !== lane);
+                const isHold = n === 0 && Math.random() < holdProb;
+                const lengthZ = isHold ? (spdZ * (0.3 + Math.random() * 0.7)) : 0;
+                beatNotes.push({ lane, type: isHold ? 'hold' : 'tap', lengthZ });
+            }
+
+            beatMap.push({ time: currentTime, energy: val, notes: beatNotes });
+            lastPeakTime = currentTime;
+        }
+    }
+
+    beatMapRef.current = beatMap;
+
+    // Estimate BPM
+    let validIntervals: number[] = [];
+    for (let j = 1; j < beatMap.length; j++) {
+        const bDiff = beatMap[j].time - beatMap[j-1].time;
+        if (bDiff > 0.2 && bDiff < 1.0) validIntervals.push(bDiff);
+    }
+    const avgInterval = validIntervals.length > 0 ? validIntervals.reduce((a,b)=>a+b, 0) / validIntervals.length : 0.5;
+    const calculatedBpm = Math.round(60 / avgInterval);
+    setBpm(calculatedBpm);
+    bpmRef.current = calculatedBpm;
   };
 
   const startGame = () => {
@@ -495,65 +630,6 @@ export default function RhythmGame() {
         if (s1) s1.innerText = '000000';
         if (s2) s2.innerText = '000000';
         
-        if (audioBufferRef.current) {
-          const channelData = audioBufferRef.current.getChannelData(0);
-          const sampleRate = audioBufferRef.current.sampleRate;
-          const diff = difficultyRef.current;
-          
-          let threshold = 0.8;
-          let cooldownSecs = 0.2;
-          let holdProb = 0.1;
-          
-          if (diff === 'easy') { threshold = 0.9; cooldownSecs = 0.35; holdProb = 0.05; }
-          else if (diff === 'hard') { threshold = 0.6; cooldownSecs = 0.15; holdProb = 0.25; }
-          else if (diff === 'expert') { threshold = 0.45; cooldownSecs = 0.1; holdProb = 0.4; }
-          
-          const beatMap: any[] = [];
-          let lastPeakTime = -cooldownSecs;
-
-          for (let i = 0; i < channelData.length; i++) {
-            const val = Math.abs(channelData[i]);
-            const currentTime = i / sampleRate;
-            
-            if (val > threshold && (currentTime - lastPeakTime) > cooldownSecs) {
-              const numNotes = (diff === 'expert' && val > 0.85) ? (val > 0.95 ? 3 : 2) : (diff === 'hard' && val > 0.9 ? 2 : 1);
-              const beatNotes = [];
-              let availableLanes = [0,1,2,3,4];
-              
-              // Adjust speed for Z-axis
-              const spdZ = getSpeed() * 200;
-              
-              for(let n=0; n<numNotes; n++) {
-                  if (availableLanes.length === 0) break;
-                  const laneIdx = Math.floor(Math.random() * availableLanes.length);
-                  const lane = availableLanes.splice(laneIdx, 1)[0];
-                  // If it's a multiple note spawn, only maybe make the first one a hold note
-                  const isHold = n === 0 && Math.random() < holdProb;
-                  const lengthZ = isHold ? (spdZ * (0.3 + Math.random() * 0.7)) : 0;
-                  beatNotes.push({ lane, type: isHold ? 'hold' : 'tap', lengthZ });
-              }
-              
-              beatMap.push({ time: currentTime, energy: val, notes: beatNotes });
-              lastPeakTime = currentTime;
-            }
-          }
-          beatMapRef.current = beatMap;
-          
-          let validIntervals: number[] = [];
-          for (let j = 1; j < beatMap.length; j++) {
-              const bDiff = beatMap[j].time - beatMap[j-1].time;
-              if (bDiff > 0.2 && bDiff < 2.0) { // Valid roughly between 30 and 300 BPM
-                  validIntervals.push(bDiff);
-              }
-          }
-          const avgInterval = validIntervals.length > 0 ? validIntervals.reduce((a,b)=>a+b, 0) / validIntervals.length : 0.5;
-          const calculatedBpm = Math.round(60 / avgInterval);
-          setBpm(calculatedBpm);
-          bpmRef.current = calculatedBpm;
-          
-          console.log(`Generated ${beatMap.length} beats for ${diff} mode. Estimated BPM: ${calculatedBpm}`);
-        }
-
         if (audioCtxRef.current && audioBufferRef.current) {
           if (audioCtxRef.current.state === 'suspended') {
             audioCtxRef.current.resume();
@@ -568,8 +644,17 @@ export default function RhythmGame() {
           gainNode.gain.value = 1.0;
           audioGainNodeRef.current = gainNode;
           
+          // Audio Mastering: Dynamics Compressor (Auto Gain / Limiter)
+          const compressor = audioCtxRef.current.createDynamicsCompressor();
+          compressor.threshold.setValueAtTime(-24, audioCtxRef.current.currentTime);
+          compressor.knee.setValueAtTime(30, audioCtxRef.current.currentTime);
+          compressor.ratio.setValueAtTime(12, audioCtxRef.current.currentTime);
+          compressor.attack.setValueAtTime(0.003, audioCtxRef.current.currentTime);
+          compressor.release.setValueAtTime(0.25, audioCtxRef.current.currentTime);
+
           source.connect(gainNode);
-          gainNode.connect(audioCtxRef.current.destination);
+          gainNode.connect(compressor);
+          compressor.connect(audioCtxRef.current.destination);
           
           source.start(0);
           audioSourceRef.current = source;
@@ -642,7 +727,15 @@ export default function RhythmGame() {
     audioUploadElement?.addEventListener('change', handleFileUpload);
 
     const triggerMiss = () => {
-        // Audio penalty removed per user request.
+        // Audio penalty: duck volume briefly to provide feedback for misses
+        if (audioGainNodeRef.current && audioCtxRef.current) {
+            const ctx = audioCtxRef.current;
+            const now = ctx.currentTime;
+            audioGainNodeRef.current.gain.cancelScheduledValues(now);
+            audioGainNodeRef.current.gain.setValueAtTime(audioGainNodeRef.current.gain.value || 1.0, now);
+            audioGainNodeRef.current.gain.linearRampToValueAtTime(0.4, now + 0.05);
+            audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.4);
+        }
     };
 
     const triggerHit = (laneIndex: number) => {
@@ -965,6 +1058,23 @@ export default function RhythmGame() {
           <div className="absolute inset-0 pointer-events-none border border-white/5 rounded-lg shadow-inner z-20"></div>
         </div>
       </div>
+      {/* Analysis & Loading Overlay */}
+      {isLoadingSong || isAnalyzing ? (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] backdrop-blur-sm transition-all animate-in fade-in duration-300">
+          <div className="text-center px-6">
+            <div className="relative w-24 h-24 mx-auto mb-8">
+                <div className="absolute inset-0 border-4 border-emerald-500/20 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <h3 className="text-emerald-500 font-black text-2xl tracking-[0.2em] uppercase mb-3 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+              {isAnalyzing ? "Analyzing Spectrum" : "Loading Track"}
+            </h3>
+            <p className="text-white/60 font-bold text-xs tracking-widest uppercase animate-pulse">
+              {isAnalyzing ? "Mapping Genre-Adaptive Peaks..." : "Buffering Audio Stream..."}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
