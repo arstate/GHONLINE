@@ -665,7 +665,7 @@ export default function RhythmGame() {
       trackScrollY += currentSpeedZ * deltaTime; 
       const trackSurface = document.getElementById('trackSurface');
       if (trackSurface) {
-          trackSurface.style.backgroundPositionY = `${trackScrollY + 100}px`;
+          trackSurface.style.backgroundPositionY = `${trackScrollY}px`;
       }
 
       for (let i = notes.length - 1; i >= 0; i--) {
@@ -1273,7 +1273,7 @@ export default function RhythmGame() {
                    width: '500px',
                    bottom: '0px', 
                    height: '20100px', 
-                   transformOrigin: 'bottom center',
+                   transformOrigin: 'center 20000px', 
                    transform: 'rotateX(90deg)', 
                    backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')",
                    backgroundRepeat: "repeat",
