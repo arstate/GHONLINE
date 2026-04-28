@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 33: Ultimate Polish. Perfected the 3D track texture alignment vertically, resolving any gaps between the perspective focal point and origin. Enhanced the 3D retro cylindrical beat notes by elevating the inner white circular top-caps into 3D raised buttons with height, making them vividly pop against their respective colored note bodies.",
+  "description": "Step 23: Complete Perspective & Texture Sync. Mathematically matched the Canvas projection and CSS 3D floor perspective using a shared focal length (250px) and vanish point (250px). Replaced the slanted floor with a true 90-degree perspective plane, syncing texture scrolling speed exactly (1 Z-unit = 1px) to make notes appear glued to the track. Added bright glowing white side-rails for a polished professional look.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
