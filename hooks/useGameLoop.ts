@@ -40,7 +40,8 @@ export function useGameLoop({
   instrumentMode,
   setGameState,
   setScore,
-  onGameEnd
+  onGameEnd,
+  keyMappings
 }: any) {
   const notesRef = useRef<Note[]>([]);
   const spawnedIndexRef = useRef(0);
@@ -49,6 +50,7 @@ export function useGameLoop({
   const activeHoldsRef = useRef<(Note | null)[]>([null, null, null, null, null]);
   const currentScoreRef = useRef(0);
   const startGameRequestRef = useRef(false);
+  const laneHitStatesRef = useRef([0, 0, 0, 0, 0]);
   const trackScrollYRef = useRef(0);
   
   const FOCAL_LENGTH = 250;
@@ -110,6 +112,7 @@ export function useGameLoop({
         if (note.type === 'tap') {
             notes.splice(hitIndex, 1);
             currentScoreRef.current += (minDiff <= 50 ? 10 : 5);
+            laneHitStatesRef.current[laneIndex] = 0.15; // 150ms visual feedback
         } else if (note.type === 'hold') {
             note.isActiveHold = true;
             activeHoldsRef.current[laneIndex] = note;
@@ -156,6 +159,45 @@ export function useGameLoop({
     const getScreenX = (offsetX: number, z: number) => VP_X + offsetX * getScale(z);
     const getScreenY = (z: number) => VP_Y + BASE_Y_OFFSET * getScale(z);
 
+    const drawPuck = (ctx: CanvasRenderingContext2D, x: number, y: number, color: string, scale: number, missed: boolean, isHit: boolean = false) => {
+      const bRX = 50 * scale, bRY = 18 * scale, iBRX = 45 * scale, iBRY = 15 * scale, tRX = 25 * scale, tRY = 9 * scale, nH = 20 * scale;
+      const tY = y - nH, nC = missed ? '#64748b' : color;
+      
+      // Base glow if hit
+      if (isHit) {
+        ctx.save();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 20 * scale;
+        ctx.fillStyle = color + '44';
+        ctx.beginPath(); ctx.ellipse(x, y, bRX * 1.5, bRY * 1.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.ellipse(x, y, bRX, bRY, 0, 0, Math.PI * 2); ctx.fill();
+      const grad = ctx.createLinearGradient(x - iBRX, 0, x + iBRX, 0); grad.addColorStop(0, '#000'); grad.addColorStop(0.3, nC); grad.addColorStop(0.7, nC); grad.addColorStop(1, '#000');
+      ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(x, y, iBRX, iBRY, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - iBRX, y); ctx.lineTo(x + iBRX, y); ctx.lineTo(x + tRX, tY); ctx.lineTo(x - tRX, tY); ctx.fill();
+      ctx.fillStyle = nC; ctx.beginPath(); ctx.ellipse(x, tY, tRX, tRY, 0, 0, Math.PI * 2); ctx.fill();
+      
+      const btRX = tRX * 0.4, btRY = tRY * 0.4, btH = 5 * scale, btTY = tY - btH;
+      ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.ellipse(x, tY, btRX, btRY, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - btRX, tY); ctx.lineTo(x + btRX, tY); ctx.lineTo(x + btRX, btTY); ctx.lineTo(x - btRX, btTY); ctx.fill();
+      
+      // Puck top with highlight/glow
+      ctx.fillStyle = '#fff'; 
+      if (!missed && scale > 0.1) {
+        ctx.shadowColor = '#fff'; 
+        ctx.shadowBlur = (isHit ? 12 : 6) * scale;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+      ctx.beginPath(); ctx.ellipse(x, btTY, btRX, btRY, 0, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0; 
+      ctx.strokeStyle = missed ? '#94a3b8' : '#ffffff'; 
+      ctx.lineWidth = Math.max(0.5, 1 * scale);
+      ctx.stroke();
+    };
+
     const offscreen = document.createElement('canvas');
     offscreen.width = width;
     offscreen.height = height;
@@ -193,10 +235,26 @@ export function useGameLoop({
 
     let animationId: number;
     let lastFrameTime = performance.now();
+    const lastGamepadState = { current: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false] };
 
     const loop = (time: number) => {
       const deltaTime = Math.min((time - lastFrameTime) / 1000, 0.1);
       lastFrameTime = time;
+
+      // Gamepad handling
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (const gp of gamepads) {
+        if (!gp) continue;
+        gp.buttons.forEach((btn, idx) => {
+          const mapping = `gp:${idx}`;
+          const laneIdx = keyMappings.findIndex((m: string) => m.toLowerCase() === mapping);
+          if (laneIdx !== -1) {
+            if (btn.pressed && !lastGamepadState.current[idx]) triggerHit(laneIdx);
+            else if (!btn.pressed && lastGamepadState.current[idx]) triggerRelease(laneIdx);
+            lastGamepadState.current[idx] = btn.pressed;
+          }
+        });
+      }
 
       if (startGameRequestRef.current) {
         startGameRequestRef.current = false;
@@ -211,10 +269,18 @@ export function useGameLoop({
           const targetVol = 0.9;
           const audioBuffer = audioBufferRef.current;
           
-          if (!('vocals' in audioBuffer)) {
+          if (audioBuffer instanceof AudioBuffer) {
              const source = audioCtxRef.current.createBufferSource();
-             source.buffer = audioBuffer as AudioBuffer;
-             const peak = Math.max(...source.buffer.getChannelData(0).map(Math.abs));
+             source.buffer = audioBuffer;
+             
+             // Safer peak calculation for large buffers
+             let peak = 0;
+             const data = source.buffer.getChannelData(0);
+             for (let i = 0; i < data.length; i += 100) {
+               const val = Math.abs(data[i]);
+               if (val > peak) peak = val;
+             }
+             
              masterGain.gain.value = peak > 0 ? targetVol / peak : 1.0;
              const penalty = audioCtxRef.current.createGain();
              audioGainNodeRef.current = penalty;
@@ -248,9 +314,20 @@ export function useGameLoop({
         }
       }
 
+      if (gameStateRef.current === 'paused') {
+        if (audioCtxRef.current && audioCtxRef.current.state === 'running') {
+          audioCtxRef.current.suspend();
+        }
+        animationId = requestAnimationFrame(loop);
+        return;
+      }
+
       if (gameStateRef.current === 'game') {
+        if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+          audioCtxRef.current.resume();
+        }
         const speed = getSpeedZ();
-        trackScrollYRef.current += speed * deltaTime;
+        trackScrollYRef.current += speed * deltaTime * 0.95;
         const ts = document.getElementById('trackSurface');
         if (ts) ts.style.transform = `translateY(${(trackScrollYRef.current % 640)}px)`;
 
@@ -270,7 +347,7 @@ export function useGameLoop({
           
           if(audioBufferRef.current) {
             const buf = audioBufferRef.current;
-            const duration = 'vocals' in buf ? buf.vocals.duration : buf.duration;
+            const duration = (buf instanceof AudioBuffer) ? buf.duration : (buf as any).vocals.duration;
             if(pbTime > duration + 1.0 && spawnedIndexRef.current >= beats.length && notesRef.current.length === 0) {
               onGameEnd(currentScoreRef.current);
             }
@@ -295,6 +372,13 @@ export function useGameLoop({
             if ((n.type === 'hold' ? n.z + n.lengthZ : n.z) < -300) notesRef.current.splice(i, 1);
           }
         }
+
+        // Update hit states decay
+        for (let i = 0; i < 5; i++) {
+          if (laneHitStatesRef.current[i] > 0) {
+            laneHitStatesRef.current[i] -= deltaTime;
+          }
+        }
       }
 
       ctx.clearRect(0, 0, width, height);
@@ -305,16 +389,27 @@ export function useGameLoop({
         const x = getScreenX((i - 2) * LANE_GAP, hitZ);
         const y = getScreenY(hitZ);
         const s = getScale(hitZ);
+        
+        const isHit = activeHoldsRef.current[i] !== null || laneHitStatesRef.current[i] > 0;
+        
         ctx.beginPath();
         ctx.ellipse(x, y, 60 * s, 22 * s, 0, 0, Math.PI * 2);
         ctx.strokeStyle = activeLanesRef.current[i] ? '#ffffff' : COLORS[i];
         ctx.lineWidth = activeLanesRef.current[i] ? 6 : 3;
         ctx.stroke();
-        if (activeLanesRef.current[i]) { ctx.fillStyle = COLORS[i] + '66'; ctx.fill(); }
+        
+        if (isHit) {
+          drawPuck(ctx, x, y, COLORS[i], s, false, true);
+        } else if (activeLanesRef.current[i]) {
+          ctx.fillStyle = COLORS[i] + '66';
+          ctx.fill();
+        }
+
         ctx.fillStyle = activeLanesRef.current[i] ? '#fff' : 'rgba(255,255,255,0.7)';
         ctx.font = `bold ${activeLanesRef.current[i] ? 24 : 20}px sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(KEYS[i], x, y + 40);
+        const label = keyMappings[i].length > 1 ? keyMappings[i].substring(0, 3) : keyMappings[i].toUpperCase();
+        ctx.fillText(label, x, y + 40);
       }
 
       // Draw notes (Furthest to Closest)
@@ -330,37 +425,12 @@ export function useGameLoop({
            const xB = getScreenX(off, bZ), yB = getScreenY(bZ), xT = getScreenX(off, tZ), yT = getScreenY(tZ);
            ctx.fillStyle = color + '90'; ctx.beginPath();
            ctx.moveTo(xB - wB, yB); ctx.lineTo(xB + wB, yB); ctx.lineTo(xT + wT, yT); ctx.lineTo(xT - wT, yT); ctx.fill();
-           if(n.isActiveHold) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(xB, yB, wB, wB*0.35, 0, 0, Math.PI*2); ctx.fill(); }
+           // Remove the ellipse here as drawPuck will handle the front puck
         }
         const scale = getScale(n.z);
         if (scale < 0.02) return;
         const x = getScreenX(off, n.z), y = getScreenY(n.z);
-        const bRX = 50 * scale, bRY = 18 * scale, iBRX = 45 * scale, iBRY = 15 * scale, tRX = 25 * scale, tRY = 9 * scale, nH = 20 * scale;
-        const tY = y - nH, nC = n.missed ? '#64748b' : color;
-        
-        ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.ellipse(x, y, bRX, bRY, 0, 0, Math.PI * 2); ctx.fill();
-        const grad = ctx.createLinearGradient(x - iBRX, 0, x + iBRX, 0); grad.addColorStop(0, '#000'); grad.addColorStop(0.3, nC); grad.addColorStop(0.7, nC); grad.addColorStop(1, '#000');
-        ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(x, y, iBRX, iBRY, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(x - iBRX, y); ctx.lineTo(x + iBRX, y); ctx.lineTo(x + tRX, tY); ctx.lineTo(x - tRX, tY); ctx.fill();
-        ctx.fillStyle = nC; ctx.beginPath(); ctx.ellipse(x, tY, tRX, tRY, 0, 0, Math.PI * 2); ctx.fill();
-        
-        const btRX = tRX * 0.4, btRY = tRY * 0.4, btH = 5 * scale, btTY = tY - btH;
-        ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.ellipse(x, tY, btRX, btRY, 0, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(x - btRX, tY); ctx.lineTo(x + btRX, tY); ctx.lineTo(x + btRX, btTY); ctx.lineTo(x - btRX, btTY); ctx.fill();
-        
-        // Puck top with highlight/glow
-        ctx.fillStyle = '#fff'; 
-        if (!n.missed && scale > 0.1) {
-          ctx.shadowColor = '#fff'; 
-          ctx.shadowBlur = 6 * scale;
-        } else {
-          ctx.shadowBlur = 0;
-        }
-        ctx.beginPath(); ctx.ellipse(x, btTY, btRX, btRY, 0, 0, Math.PI*2); ctx.fill();
-        ctx.shadowBlur = 0; 
-        ctx.strokeStyle = n.missed ? '#94a3b8' : '#ffffff'; 
-        ctx.lineWidth = Math.max(0.5, 1 * scale);
-        ctx.stroke();
+        drawPuck(ctx, x, y, n.color, scale, n.missed);
       });
 
       const horizonY = getScreenY(START_Z);
@@ -375,12 +445,14 @@ export function useGameLoop({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if(k in KEY_MAP) triggerHit(KEY_MAP[k]);
-      else if(e.key === 'Escape') gameStateRef.current === 'game' ? setGameState('paused') : gameStateRef.current === 'paused' ? setGameState('resuming') : null;
+      const laneIdx = keyMappings.findIndex((m: string) => m.toLowerCase() === k);
+      if (laneIdx !== -1) triggerHit(laneIdx);
+      else if (e.key === 'Escape') gameStateRef.current === 'game' ? setGameState('paused') : gameStateRef.current === 'paused' ? setGameState('resuming') : null;
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if(k in KEY_MAP) triggerRelease(KEY_MAP[k]);
+      const laneIdx = keyMappings.findIndex((m: string) => m.toLowerCase() === k);
+      if (laneIdx !== -1) triggerRelease(laneIdx);
     };
     const handlePointerDown = (e: PointerEvent | TouchEvent) => {
       if (gameStateRef.current !== 'game') return;
@@ -433,7 +505,7 @@ export function useGameLoop({
       canvas.removeEventListener('pointerdown', handlePointerDown as any);
       canvas.removeEventListener('pointerup', handlePointerUp as any);
     };
-  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, beatMapRef, instrumentMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHit, triggerMiss, triggerRelease]);
+  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, beatMapRef, instrumentMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHit, triggerMiss, triggerRelease, keyMappings]);
 
   return { startGameRequestRef };
 }

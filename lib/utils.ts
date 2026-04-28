@@ -37,7 +37,17 @@ export const defaultPlaylist: Song[] = [
     }
   },
   { id: '2', title: "Dewi", type: 'remote', url: "https://ia601502.us.archive.org/20/items/dewi_20260427/Dewi.mp3" },
-  { id: '3', title: "Threesixty - Dewi (Pop Punk Cover)", type: 'remote', url: "https://ia600104.us.archive.org/1/items/threesixty-dewi-pop-punk-cover-lyric-video/Threesixty%20-%20Dewi%EF%BD%9C%20Pop%20Punk%20Cover%20%28Lyric%20Video%29.mp3" },
+  { 
+    id: '3', 
+    title: "Threesixty - Dewi (Pop Punk Cover) (Multitrack)", 
+    type: 'remote', 
+    stems: {
+      vocals: "https://ia601906.us.archive.org/23/items/threesixty-dewi-pop-punk-cover-lyric-video-vocals-c-major-203bpm-441hz/Threesixty%20-%20Dewi%EF%BD%9C%20Pop%20Punk%20Cover%20%28Lyric%20Video%29-vocals-C%20major-203bpm-441hz.mp3",
+      other: "https://ia600507.us.archive.org/13/items/threesixty-dewi-pop-punk-cover-lyric-video-other-c-major-203bpm-441hz/Threesixty%20-%20Dewi%EF%BD%9C%20Pop%20Punk%20Cover%20%28Lyric%20Video%29-other-C%20major-203bpm-441hz.mp3",
+      drums: "https://ia600601.us.archive.org/4/items/threesixty-dewi-pop-punk-cover-lyric-video-drums-c-major-203bpm-441hz/Threesixty%20-%20Dewi%EF%BD%9C%20Pop%20Punk%20Cover%20%28Lyric%20Video%29-drums-C%20major-203bpm-441hz.mp3",
+      bass: "https://ia601502.us.archive.org/21/items/threesixty-dewi-pop-punk-cover-lyric-video-bass-c-major-203bpm-441hz/Threesixty%20-%20Dewi%EF%BD%9C%20Pop%20Punk%20Cover%20%28Lyric%20Video%29-bass-C%20major-203bpm-441hz.mp3"
+    } 
+  },
   { id: '4', title: "Hindia - everything u are", type: 'remote', url: "https://ia601507.us.archive.org/4/items/hindia-everything-u-are/Hindia%20-%20everything%20u%20are.mp3" },
   { id: '5', title: ".Feast - Nina", type: 'remote', url: "https://ia600704.us.archive.org/33/items/feast-nina-official-lyric-video/Feast%20-%20Nina%20%28Official%20Lyric%20Video%29.mp3" },
   { id: '6', title: "Sampai Nanti - Threesixty Skatepunk", type: 'remote', url: "https://ia600900.us.archive.org/13/items/sampai-nanti-threesixty-skatepunk/Sampai%20Nanti%20-%20Threesixty%20Skatepunk.mp3" },
