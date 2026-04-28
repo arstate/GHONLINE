@@ -849,7 +849,24 @@ export default function RhythmGame() {
             const mode = instrumentModeRef.current;
             const stems = ['vocals', 'other', 'drums', 'bass'] as const;
             
-            masterGainNode.gain.value = 1.0; // overall mix safely kept flat if stems are pre-mixed
+            // Calculate combined auto-gain to keep stems in proportion while matching target volume
+            const vData = (audioBuffer as any)['vocals'].getChannelData(0);
+            const oData = (audioBuffer as any)['other'].getChannelData(0);
+            const dData = (audioBuffer as any)['drums'].getChannelData(0);
+            const bData = (audioBuffer as any)['bass'].getChannelData(0);
+            
+            const minLength = Math.min(vData.length, oData.length, dData.length, bData.length);
+            let combinedMaxPeak = 0;
+            
+            for (let i = 0; i < minLength; i++) {
+                const sum = vData[i] + oData[i] + dData[i] + bData[i];
+                const absVal = Math.abs(sum);
+                if (absVal > combinedMaxPeak) combinedMaxPeak = absVal;
+            }
+            
+            const calculatedGain = combinedMaxPeak > 0 ? targetVolume / combinedMaxPeak : 1.0;
+            masterGainNode.gain.value = calculatedGain;
+            
             masterGainNode.connect(audioCtxRef.current.destination);
             
             const startTime = audioCtxRef.current.currentTime;
@@ -948,7 +965,7 @@ export default function RhythmGame() {
     audioUploadElement?.addEventListener('change', handleFileUpload);
 
     const triggerMiss = () => {
-        // Audio penalty: mute targeted stem briefly to provide feedback for misses
+        // Audio penalty: mute targeted stem for 1.5s to provide feedback for misses
         if (audioGainNodeRef.current && audioCtxRef.current) {
             const ctx = audioCtxRef.current;
             const now = ctx.currentTime;
@@ -956,10 +973,14 @@ export default function RhythmGame() {
             // Fixed duck volume for isolated stems
             const duckVolume = 0.0;
             
+            // Reset scheduled values to extend the mute if a miss happens again
             audioGainNodeRef.current.gain.cancelScheduledValues(now);
-            audioGainNodeRef.current.gain.setValueAtTime(audioGainNodeRef.current.gain.value || 1.0, now);
-            audioGainNodeRef.current.gain.linearRampToValueAtTime(duckVolume, now + 0.05);
-            audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.5);
+            audioGainNodeRef.current.gain.setValueAtTime(audioGainNodeRef.current.gain.value, now);
+            // Drop volume instantly
+            audioGainNodeRef.current.gain.linearRampToValueAtTime(duckVolume, now + 0.02);
+            // Hold mute for 1.5 seconds, then ramp back up
+            audioGainNodeRef.current.gain.setValueAtTime(duckVolume, now + 1.5);
+            audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 1.55);
         }
     };
 
@@ -981,6 +1002,13 @@ export default function RhythmGame() {
         }
         
         if (hitIndex !== -1) {
+            // Restore audio instantly if it was muted from a previous miss
+            if (audioGainNodeRef.current && audioCtxRef.current) {
+                const now = audioCtxRef.current.currentTime;
+                audioGainNodeRef.current.gain.cancelScheduledValues(now);
+                audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.02);
+            }
+
             const note = notes[hitIndex];
             if (note.type === 'tap') {
                 notes.splice(hitIndex, 1);

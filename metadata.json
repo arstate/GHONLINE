@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 22: Refined Pause & Hold Note Mechanics. The pause blur and dark overlay now only appear while the pause menu is actively showing, leaving the background clear during the 5-second resume countdown. Early successful releases of Hold Notes no longer trigger misses or mute audio.",
+  "description": "Step 24: Enhanced Audio Penalty Feedback. Implemented a reactive 1.5-second mute penalty on note misses that resets with consecutive errors. Successful note hits now instantly restore audio volume for immediate positive feedback.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
