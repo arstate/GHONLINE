@@ -45,7 +45,8 @@ export function useGameLoop({
   setScore,
   onGameEnd,
   p1Keys,
-  p2Keys
+  p2Keys,
+  audioOffset
 }: any) {
   const notesP1Ref = useRef<Note[]>([]);
   const notesP2Ref = useRef<Note[]>([]);
@@ -68,7 +69,7 @@ export function useGameLoop({
   const BASE_Y_OFFSET = 500;
   
   const getSpeedZ = useCallback(() => {
-    const speedMap: Record<string, number> = { easy: 400, normal: 600, hard: 800, expert: 1100 };
+    const speedMap: Record<string, number> = { easy: 400, normal: 600, hard: 1000, expert: 1200 };
     return speedMap[difficulty] || 600;
   }, [difficulty]);
 
@@ -359,8 +360,18 @@ export function useGameLoop({
                 const src = ctx.createBufferSource();
                 src.buffer = buffers[stem];
                 const g = ctx.createGain();
-                if (stem === 'other') audioGainNodeRef.current = g;
-                if (stem === 'drums') audioGainP2Ref.current = g;
+                
+                // Muting Logic:
+                if (gameMode === 'multiplayer') {
+                  if (stem === 'other') audioGainNodeRef.current = g; // P1 Guitar
+                  if (stem === 'drums') audioGainP2Ref.current = g;    // P2 Drums
+                } else {
+                  // Single Player: Mute the specific track being played
+                  if (instrumentMode === stem) {
+                    audioGainNodeRef.current = g;
+                  }
+                }
+                
                 src.connect(g).connect(masterGain);
                 audioSourcesRef.current.push(src);
                 src.start(startT);
@@ -390,7 +401,7 @@ export function useGameLoop({
         if (ts2) ts2.style.transform = `translateY(${(trackScrollYRef.current % 640)}px)`;
 
         if (audioCtxRef.current) {
-          const pbTime = audioCtxRef.current.currentTime - startTimeRef.current;
+          const pbTime = (audioCtxRef.current.currentTime - startTimeRef.current) + (audioOffset / 1000);
           const fallT = START_Z / speed;
           
           // Spawn P1
@@ -636,7 +647,7 @@ export function useGameLoop({
       canvas.removeEventListener('pointerdown', handlePointerDown as any);
       canvas.removeEventListener('pointerup', handlePointerUp as any);
     };
-  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, audioGainP2Ref, beatMapRef, beatMapP2Ref, difficulty, instrumentMode, gameMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHitP1, triggerHitP2, triggerMissP1, triggerMissP2, triggerReleaseP1, triggerReleaseP2, p1Keys, p2Keys]);
+  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, audioGainP2Ref, beatMapRef, beatMapP2Ref, difficulty, instrumentMode, gameMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHitP1, triggerHitP2, triggerMissP1, triggerMissP2, triggerReleaseP1, triggerReleaseP2, p1Keys, p2Keys, audioOffset]);
 
   return { startGameRequestRef };
 }

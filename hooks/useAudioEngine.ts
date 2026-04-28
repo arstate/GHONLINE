@@ -1,6 +1,7 @@
 
 import { useRef, useState } from 'react';
 import { getSongBuffer, Song } from '../lib/utils';
+import { analyzeBeatMap, InstrumentType } from '../lib/beatDetection';
 
 export function useAudioEngine() {
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -44,159 +45,51 @@ export function useAudioEngine() {
     return allChunks.buffer;
   };
 
-  const analyzeAndGenerateBeatMap = async (buffer: AudioBuffer, currentDiff: string, targetRef: any = beatMapRef, isDrums: boolean = false) => {
-    const offlineCtx = new OfflineAudioContext(3, buffer.length, buffer.sampleRate);
-    const source = offlineCtx.createBufferSource();
-    source.buffer = buffer;
-
-    const merger = offlineCtx.createChannelMerger(3);
-
-    const lp = offlineCtx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = isDrums ? 120 : 150; // Focused slightly more for drums
-    source.connect(lp);
-    lp.connect(merger, 0, 0);
-
-    const bp = offlineCtx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = isDrums ? 800 : 1300;
-    bp.Q.value = 0.5;
-    source.connect(bp);
-    bp.connect(merger, 0, 1);
-
-    const hp = offlineCtx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 3000;
-    source.connect(hp);
-    hp.connect(merger, 0, 2);
-
-    merger.connect(offlineCtx.destination);
-    source.start();
-
-    const renderedBuffer = await offlineCtx.startRendering();
-    const lowData = renderedBuffer.getChannelData(0);
-    const midData = renderedBuffer.getChannelData(1);
-    const highData = renderedBuffer.getChannelData(2);
-
-    const normalize = (data: Float32Array) => {
-        let max = 0;
-        for (let i = 0; i < data.length; i++) {
-            const val = Math.abs(data[i]);
-            if (val > max) max = val;
-        }
-        if (max > 0) {
-            for (let i = 0; i < data.length; i++) data[i] /= max;
-        }
-    };
-    normalize(lowData);
-    normalize(midData);
-    normalize(highData);
-
-    let lowEnergy = 0;
-    let midEnergy = 0;
-    const energyStep = Math.floor(buffer.sampleRate / 2);
-    for (let i = 0; i < lowData.length; i += energyStep) {
-        lowEnergy += Math.abs(lowData[i]);
-        midEnergy += Math.abs(midData[i]);
-    }
-    const isRock = isDrums ? false : midEnergy > (lowEnergy * 0.65); // For drums, we always favor low energy for kick/snare
-
-    const beatMap: any[] = [];
-    const sampleRate = buffer.sampleRate;
-    const sampleWindow = 512;
-    const windowSeconds = 1.5; 
-    const windowSamples = Math.floor(windowSeconds * sampleRate / sampleWindow);
+  const analyzeAndGenerateBeatMap = async (
+    buffer: AudioBuffer, 
+    currentDiff: string, 
+    targetRef: any = beatMapRef, 
+    instrumentType: InstrumentType = 'other'
+  ) => {
+    const detectedNotes = await analyzeBeatMap(buffer, instrumentType, currentDiff);
     
-    let sensitivity = isDrums ? 1.25 : 1.35; // Slightly more sensitive for drums
-    let cooldownSecs = isDrums ? 0.18 : 0.22;
-    let holdProb = isDrums ? 0.05 : 0.1; // Less holds for drums
-    
-    if (currentDiff === 'easy') { sensitivity = 1.8; cooldownSecs = 0.45; holdProb = 0.05; }
-    else if (currentDiff === 'hard') { sensitivity = 1.25; cooldownSecs = 0.16; holdProb = 0.25; }
-    else if (currentDiff === 'expert') { sensitivity = 1.15; cooldownSecs = 0.12; holdProb = 0.4; }
+    // Convert to the game's internal format
+    // Group notes by timestamp for chords
+    const grouped: Record<string, any[]> = {};
+    detectedNotes.forEach(note => {
+      const timeKey = note.time.toFixed(4);
+      if (!grouped[timeKey]) grouped[timeKey] = [];
+      grouped[timeKey].push({ lane: note.lane, type: note.type, duration: note.duration });
+    });
 
-    let lastPeakTime = -cooldownSecs;
-    let laneFreeTime = [0, 0, 0, 0, 0];
-    const minGap = 0.2; 
+    const beatMap = Object.entries(grouped)
+      .map(([time, notes]) => ({ time: parseFloat(time), notes }))
+      .sort((a, b) => a.time - b.time);
 
-    let localFluxSum = 0;
-    const fluxHistory: number[] = [];
-    const analysisData = isRock ? midData : lowData;
-    let prevEnergy = 0;
-
-    for (let i = 0; i < analysisData.length; i += sampleWindow) {
-        let sum = 0;
-        let limit = Math.min(i + sampleWindow, analysisData.length);
-        for(let j = i; j < limit; j++) sum += Math.abs(analysisData[j]);
-        const currentEnergy = sum / (limit - i);
-        const flux = Math.max(0, currentEnergy - prevEnergy);
-        prevEnergy = currentEnergy;
-        const currentTime = i / sampleRate;
-
-        fluxHistory.push(flux);
-        localFluxSum += flux;
-        if (fluxHistory.length > windowSamples) localFluxSum -= fluxHistory.shift()!;
-        const localFluxAvg = localFluxSum / fluxHistory.length;
-        const dynamicThreshold = localFluxAvg * sensitivity;
-
-        if (flux > dynamicThreshold && flux > 0.005 && (currentTime - lastPeakTime) > cooldownSecs) {
-            const lowVal = Math.abs(lowData[i]);
-            const midVal = Math.abs(midData[i]);
-            let numNotes = 1;
-            if (currentDiff === 'expert' && flux > dynamicThreshold * 1.8) numNotes = 3;
-            else if ((currentDiff === 'hard' || currentDiff === 'expert') && flux > dynamicThreshold * 1.4) numNotes = 2;
-            
-            let availableLanes = [0, 1, 2, 3, 4].filter(l => currentTime >= laneFreeTime[l]);
-            if (availableLanes.length === 0) continue;
-            numNotes = Math.min(numNotes, availableLanes.length);
-
-            const beatNotes = [];
-            for (let n = 0; n < numNotes; n++) {
-                if (availableLanes.length === 0) break;
-                let lane;
-                if (lowVal > midVal * 1.2) {
-                    const outer = availableLanes.filter(l => l === 0 || l === 4);
-                    lane = outer.length > 0 ? outer[Math.floor(Math.random() * outer.length)] : availableLanes[Math.floor(Math.random() * availableLanes.length)];
-                } else {
-                    const inner = availableLanes.filter(l => l === 1 || l === 2 || l === 3);
-                    lane = inner.length > 0 ? inner[Math.floor(Math.random() * inner.length)] : availableLanes[Math.floor(Math.random() * availableLanes.length)];
-                }
-                availableLanes = availableLanes.filter(l => l !== lane);
-                const isHold = n === 0 && Math.random() < holdProb;
-                const holdDurationSecs = isHold ? (0.3 + Math.random() * 0.7) : 0;
-                laneFreeTime[lane] = currentTime + holdDurationSecs + minGap;
-                beatNotes.push({ lane, type: isHold ? 'hold' : 'tap', duration: holdDurationSecs });
-            }
-            if (beatNotes.length > 0) {
-                beatMap.push({ time: currentTime, notes: beatNotes });
-                lastPeakTime = currentTime;
-            }
-        }
-    }
     targetRef.current = beatMap;
-    
-    let intervals: number[] = [];
-    for (let j = 1; j < beatMap.length; j++) {
-        const interval = beatMap[j].time - beatMap[j-1].time;
-        if (interval > 0.25 && interval < 1.0) intervals.push(interval);
+
+    // Estimate BPM from intervals if not already set
+    if (beatMap.length > 1) {
+      let intervals = [];
+      for(let i=1; i < Math.min(beatMap.length, 100); i++) {
+        const diff = beatMap[i].time - beatMap[i-1].time;
+        if (diff > 0.1) intervals.push(diff);
+      }
+      if (intervals.length > 0) {
+        intervals.sort((a, b) => a - b);
+        const median = intervals[Math.floor(intervals.length / 2)];
+        let b = Math.round(60 / median);
+        while (b < 100) b *= 2;
+        while (b > 200) b /= 2;
+        setBpm(Math.round(b));
+      } else {
+        setBpm(120);
+      }
+    } else {
+      setBpm(120);
     }
-    
-    let calculatedBpm = 120;
-    if (intervals.length > 0) {
-        const bins: Record<string, number> = {};
-        for (const interval of intervals) {
-            const binKey = (Math.round(interval * 20) / 20).toFixed(2);
-            bins[binKey] = (bins[binKey] || 0) + 1;
-        }
-        let maxCount = 0;
-        let modeInterval = 0.5;
-        for (const [key, count] of Object.entries(bins)) {
-            if (count > maxCount) { maxCount = count; modeInterval = parseFloat(key); }
-        }
-        calculatedBpm = Math.round(60 / modeInterval);
-    }
-    setBpm(calculatedBpm);
   };
+
 
   const loadSong = async (song: Song, difficulty: string, instrumentMode: 'other' | 'drums' | 'bass', gameMode: 'single' | 'multiplayer' = 'single') => {
     setIsLoadingSong(true);
@@ -247,11 +140,10 @@ export function useAudioEngine() {
       }
       setIsAnalyzing(true);
       
-      const isP1Drums = gameMode !== 'multiplayer' && instrumentMode === 'drums';
-      await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, isP1Drums);
+      await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, gameMode === 'multiplayer' ? 'other' : instrumentMode);
       
       if (analyzeBufferP2) {
-        await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, true); // P2 is always Drums in multiplayer
+        await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums'); // P2 is always Drums in multiplayer
       } else {
         beatMapP2Ref.current = [];
       }

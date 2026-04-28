@@ -23,6 +23,13 @@ export default function RhythmGame() {
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const countdownRef = useRef<number | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [audioOffset, setAudioOffset] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('rhytmika_audio_offset');
+      if (saved) return parseInt(saved, 10);
+    }
+    return 0;
+  });
 
   const [p1Keys, setP1Keys] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
@@ -52,6 +59,11 @@ export default function RhythmGame() {
       setP2Keys(keys);
       localStorage.setItem('rhytmika_p2_keys', JSON.stringify(keys));
     }
+  };
+
+  const saveOffset = (offset: number) => {
+    setAudioOffset(offset);
+    localStorage.setItem('rhytmika_audio_offset', offset.toString());
   };
 
   useEffect(() => {
@@ -118,7 +130,8 @@ export default function RhythmGame() {
     setScore,
     onGameEnd: handleGameEnd,
     p1Keys,
-    p2Keys
+    p2Keys,
+    audioOffset
   });
 
   useEffect(() => {
@@ -297,6 +310,31 @@ export default function RhythmGame() {
                     </p>
                   </div>
                 </div>
+
+                <div className="pt-4 border-t border-zinc-800">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-emerald-500 font-bold uppercase text-sm tracking-widest">Audio Sync (Latency)</h3>
+                    <span className={cn("text-lg font-black font-mono px-3 py-1 rounded bg-black", audioOffset > 0 ? "text-rose-400" : audioOffset < 0 ? "text-blue-400" : "text-emerald-400")}>
+                      {audioOffset > 0 ? '+' : ''}{audioOffset}ms
+                    </span>
+                  </div>
+                  <div className="px-4">
+                    <input 
+                      type="range" 
+                      min="-500" 
+                      max="500" 
+                      step="5"
+                      value={audioOffset} 
+                      onChange={(e) => saveOffset(parseInt(e.target.value, 10))}
+                      className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    />
+                    <div className="flex justify-between mt-2 text-[10px] text-zinc-500 font-bold uppercase tracking-tighter">
+                      <span>Notes Late (-500ms)</span>
+                      <span>Balanced (0ms)</span>
+                      <span>Notes Early (+500ms)</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="p-8 bg-zinc-900/50 border-t border-zinc-800 flex gap-4">
@@ -388,11 +426,14 @@ export default function RhythmGame() {
             loadingProgress={loadingProgress}
             isAnalyzing={isAnalyzing}
             score={score}
+            audioOffset={audioOffset}
+            setAudioOffset={saveOffset}
             onCancelSelection={() => setSelectedSong(null)}
             onPlaySong={handlePlaySong}
             onResume={resumeGame}
             onBackToLobby={() => { setGameState('lobby'); stopAudio(); }}
             onReplay={() => { setGameState('countdown'); stopAudio(); startGame(); }}
+            onOpenSettings={() => setShowSettings(true)}
           />
 
           {gameState === 'lobby' && <Lobby onSelectSong={setSelectedSong} isLoadingSong={isLoadingSong} />}

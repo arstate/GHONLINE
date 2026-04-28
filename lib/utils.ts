@@ -51,7 +51,17 @@ export const defaultPlaylist: Song[] = [
   { id: '4', title: "Hindia - everything u are", type: 'remote', url: "https://ia601507.us.archive.org/4/items/hindia-everything-u-are/Hindia%20-%20everything%20u%20are.mp3" },
   { id: '5', title: ".Feast - Nina", type: 'remote', url: "https://ia600704.us.archive.org/33/items/feast-nina-official-lyric-video/Feast%20-%20Nina%20%28Official%20Lyric%20Video%29.mp3" },
   { id: '6', title: "Sampai Nanti - Threesixty Skatepunk", type: 'remote', url: "https://ia600900.us.archive.org/13/items/sampai-nanti-threesixty-skatepunk/Sampai%20Nanti%20-%20Threesixty%20Skatepunk.mp3" },
-  { id: '7', title: "DRAGONFORCE - Through the Fire and Flames", type: 'remote', url: "https://ia600909.us.archive.org/35/items/dragonforce-through-the-fire-and-flames-official-video-dragon-force-youtube/DRAGONFORCE%20-%20Through%20the%20Fire%20and%20Flames%20%28Official%20Video%29%20-%20DragonForce%20%28youtube%29.mp3" },
+  { 
+    id: '7', 
+    title: "DRAGONFORCE - Through the Fire and Flames (Multitrack)", 
+    type: 'remote', 
+    stems: {
+      vocals: "https://dn711202.ca.archive.org/0/items/dragonforce-through-the-fire-and-flames-official-video-dragon-force-youtube-voca/DRAGONFORCE%20-%20Through%20the%20Fire%20and%20Flames%20%28Official%20Video%29%20-%20DragonForce%20%28youtube%29-vocals-C%20minor-200bpm-441hz.mp3",
+      other: "https://dn711202.ca.archive.org/0/items/dragonforce-through-the-fire-and-flames-official-video-dragon-force-youtube-othe/DRAGONFORCE%20-%20Through%20the%20Fire%20and%20Flames%20%28Official%20Video%29%20-%20DragonForce%20%28youtube%29-other-C%20minor-200bpm-441hz.mp3",
+      drums: "https://dn711202.ca.archive.org/0/items/dragonforce-through-the-fire-and-flames-official-video-dragon-force-youtube-drum/DRAGONFORCE%20-%20Through%20the%20Fire%20and%20Flames%20%28Official%20Video%29%20-%20DragonForce%20%28youtube%29-drums-C%20minor-200bpm-441hz.mp3",
+      bass: "https://dn711202.ca.archive.org/0/items/dragonforce-through-the-fire-and-flames-official-video-dragon-force-youtube-bass/DRAGONFORCE%20-%20Through%20the%20Fire%20and%20Flames%20%28Official%20Video%29%20-%20DragonForce%20%28youtube%29-bass-C%20minor-200bpm-441hz.mp3"
+    } 
+  },
   { id: '8', title: "Tulus - Andai Aku Bisa (Chrisye Cover)", type: 'remote', url: "https://ia601600.us.archive.org/11/items/tulus-andai-aku-bisa-chrisye-cover-lirik-vero-april-youtube/Tulus%20-%20Andai%20Aku%20Bisa%20%28Chrisye%20Cover%29%20%20Lirik%20-%20Vero%20April%20%28youtube%29.mp3" }
 ];
 

@@ -15,11 +15,14 @@ interface ModalsProps {
   loadingProgress: number;
   isAnalyzing: boolean;
   score: number;
+  audioOffset: number;
+  setAudioOffset: (offset: number) => void;
   onCancelSelection: () => void;
   onPlaySong: () => void;
   onResume: () => void;
   onBackToLobby: () => void;
   onReplay: () => void;
+  onOpenSettings?: () => void;
 }
 
 export function Modals({
@@ -35,14 +38,20 @@ export function Modals({
   loadingProgress,
   isAnalyzing,
   score,
+  audioOffset,
+  setAudioOffset,
   onCancelSelection,
   onPlaySong,
   onResume,
   onBackToLobby,
-  onReplay
+  onReplay,
+  onOpenSettings
 }: ModalsProps) {
+  const [showSyncInPause, setShowSyncInPause] = React.useState(false);
+
   return (
     <>
+      {/* ... */}
       {/* Difficulty Selection */}
       {selectedSong && gameState === 'lobby' && (
         <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -79,12 +88,12 @@ export function Modals({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mb-8">
-                    {(['easy', 'normal', 'hard', 'expert'] as const).map(diff => (
+                    {(['easy', 'normal', 'hard', 'extreme'] as const).map(diff => (
                         <button
                             key={diff}
-                            onClick={() => setDifficulty(diff)}
+                            onClick={() => setDifficulty(diff === 'extreme' ? 'expert' : diff)}
                             className={`py-4 rounded-xl font-bold uppercase tracking-wider transition-all border-2 ${
-                                difficulty === diff 
+                                (difficulty === diff || (difficulty === 'expert' && diff === 'extreme')) 
                                 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
                                 : 'border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 bg-neutral-950/50'
                             }`}
@@ -139,10 +148,36 @@ export function Modals({
       {gameState === 'paused' && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-md flex flex-col items-center justify-center z-50 text-center rounded-lg border border-white/10 p-8 shadow-2xl">
           <h2 className="text-3xl font-black text-white mb-8 tracking-widest uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">Paused</h2>
-          <div className="flex flex-col gap-4 w-full max-w-xs">
-              <button onClick={onResume} className="w-full px-6 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.4)]">Resume</button>
-              <button onClick={onBackToLobby} className="w-full px-6 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg uppercase tracking-wider transition-all backdrop-blur-md border border-white/5 active:scale-95">Back to Lobby</button>
-          </div>
+          
+          {showSyncInPause ? (
+            <div className="w-full max-w-xs bg-zinc-900 border border-zinc-700 rounded-3xl p-6 mb-4 animate-in fade-in zoom-in-95">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-emerald-500 font-bold uppercase text-[10px] tracking-widest">Audio Sync</h3>
+                <span className="text-emerald-400 font-mono text-sm">{audioOffset > 0 ? '+' : ''}{audioOffset}ms</span>
+              </div>
+              <input 
+                type="range" 
+                min="-500" 
+                max="500" 
+                step="5"
+                value={audioOffset} 
+                onChange={(e) => setAudioOffset(parseInt(e.target.value, 10))}
+                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 mb-6"
+              />
+              <button 
+                onClick={() => setShowSyncInPause(false)}
+                className="w-full py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold uppercase"
+              >
+                Done
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 w-full max-w-xs">
+                <button onClick={onResume} className="w-full px-6 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.4)]">Resume</button>
+                <button onClick={() => setShowSyncInPause(true)} className="w-full px-6 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg uppercase tracking-wider transition-all backdrop-blur-md border border-white/5 active:scale-95">Sync Music</button>
+                <button onClick={onBackToLobby} className="w-full px-6 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg uppercase tracking-wider transition-all backdrop-blur-md border border-white/5 active:scale-95">Back to Lobby</button>
+            </div>
+          )}
         </div>
       )}
 
