@@ -29,6 +29,17 @@ const defaultPlaylist: Song[] = [
       bass: "https://ia601906.us.archive.org/12/items/ghea-indrawari-teramini-cover-damnt-rh-youtube-bass-ab-major-158bpm-441hz/Ghea%20Indrawari%20-%20Teramini%20%28COVER%29%20-%20damnt_rh%20%28youtube%29-bass-Ab%20major-158bpm-441hz.mp3"
     } 
   },
+  {
+    id: '9',
+    title: "KARNAMEREKA - Tante Kesepian (Multitrack)",
+    type: 'remote',
+    stems: {
+      vocals: "https://ia902900.us.archive.org/24/items/karnamereka-tante-kesepian-video-lirik-karnamereka-vocals-c-major-220bpm-441hz/KARNAMEREKA%20-%20Tante%20Kesepian%20%28%20video%20lirik%20%29%20-%20KARNAMEREKA-vocals-C%20major-220bpm-441hz.mp3",
+      other: "https://ia601508.us.archive.org/26/items/karnamereka-tante-kesepian-video-lirik-karnamereka-other-c-major-220bpm-441hz/KARNAMEREKA%20-%20Tante%20Kesepian%20%28%20video%20lirik%20%29%20-%20KARNAMEREKA-other-C%20major-220bpm-441hz.mp3",
+      drums: "https://ia600507.us.archive.org/28/items/karnamereka-tante-kesepian-video-lirik-karnamereka-drums-c-major-220bpm-441hz/KARNAMEREKA%20-%20Tante%20Kesepian%20%28%20video%20lirik%20%29%20-%20KARNAMEREKA-drums-C%20major-220bpm-441hz.mp3",
+      bass: "https://ia601007.us.archive.org/10/items/karnamereka-tante-kesepian-video-lirik-karnamereka-bass-c-major-220bpm-441hz/KARNAMEREKA%20-%20Tante%20Kesepian%20%28%20video%20lirik%20%29%20-%20KARNAMEREKA-bass-C%20major-220bpm-441hz.mp3"
+    }
+  },
   { id: '2', title: "Dewi", type: 'remote', url: "https://ia601502.us.archive.org/20/items/dewi_20260427/Dewi.mp3" },
   { id: '3', title: "Threesixty - Dewi (Pop Punk Cover)", type: 'remote', url: "https://ia600104.us.archive.org/1/items/threesixty-dewi-pop-punk-cover-lyric-video/Threesixty%20-%20Dewi%EF%BD%9C%20Pop%20Punk%20Cover%20%28Lyric%20Video%29.mp3" },
   { id: '4', title: "Hindia - everything u are", type: 'remote', url: "https://ia601507.us.archive.org/4/items/hindia-everything-u-are/Hindia%20-%20everything%20u%20are.mp3" },
@@ -124,6 +135,7 @@ export default function RhythmGame() {
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [instrumentMode, setInstrumentMode] = useState<'other' | 'drums' | 'bass'>('drums');
   const [isLoadingSong, setIsLoadingSong] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Audio and game state refs
@@ -176,29 +188,80 @@ export default function RhythmGame() {
   const handlePlaySong = async () => {
     if (!selectedSong) return;
     setIsLoadingSong(true);
+    setLoadingProgress(0);
     
     try {
         if (!audioCtxRef.current) {
             audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         }
 
+        const fetchWithProgress = async (url: string, onProgress: (loaded: number, total: number) => void) => {
+          const response = await fetch(url);
+          if (!response.body) return null;
+          
+          const contentLength = response.headers.get('content-length');
+          const total = contentLength ? parseInt(contentLength, 10) : 0;
+          let loaded = 0;
+
+          const reader = response.body.getReader();
+          const chunks: Uint8Array[] = [];
+
+          while(true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            loaded += value.length;
+            onProgress(loaded, total);
+          }
+
+          const allChunks = new Uint8Array(loaded);
+          let position = 0;
+          for (const chunk of chunks) {
+            allChunks.set(chunk, position);
+            position += chunk.length;
+          }
+
+          return allChunks.buffer;
+        };
+
+        const preloadTexture = new Promise<void>((resolve, reject) => {
+            const img = new Image();
+            img.src = 'https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg';
+            img.onload = () => resolve();
+            img.onerror = reject;
+        });
+
         let analyzeBuffer: AudioBuffer;
 
         if (selectedSong.stems) {
             const stems = selectedSong.stems;
-            const [vocRes, otherRes, drumRes, bassRes] = await Promise.all([
-               fetch(stems.vocals).then(r => r.arrayBuffer()),
-               fetch(stems.other).then(r => r.arrayBuffer()),
-               fetch(stems.drums).then(r => r.arrayBuffer()),
-               fetch(stems.bass).then(r => r.arrayBuffer())
-            ]);
+            const stemUrls = [stems.vocals, stems.other, stems.drums, stems.bass];
+            const progressMap = new Map<number, { loaded: number, total: number }>();
             
-            const [vocBuf, otherBuf, drumBuf, bassBuf] = await Promise.all([
-                audioCtxRef.current.decodeAudioData(vocRes),
-                audioCtxRef.current.decodeAudioData(otherRes),
-                audioCtxRef.current.decodeAudioData(drumRes),
-                audioCtxRef.current.decodeAudioData(bassRes)
-            ]);
+            const updateGlobalProgress = () => {
+              let totalLoaded = 0;
+              let totalSize = 0;
+              progressMap.forEach(p => {
+                totalLoaded += p.loaded;
+                totalSize += p.total;
+              });
+              if (totalSize > 0) {
+                setLoadingProgress(Math.floor((totalLoaded / totalSize) * 100));
+              }
+            };
+
+            const stemBuffers = await Promise.all(stemUrls.map((url, idx) => 
+              fetchWithProgress(url, (loaded, total) => {
+                progressMap.set(idx, { loaded, total });
+                updateGlobalProgress();
+              })
+            ));
+
+            if (stemBuffers.some(b => b === null)) throw new Error("Failed to download stems");
+
+            const [vocBuf, otherBuf, drumBuf, bassBuf] = await Promise.all(stemBuffers.map(buf => 
+                audioCtxRef.current!.decodeAudioData(buf!)
+            ));
             
             audioBufferRef.current = { vocals: vocBuf, other: otherBuf, drums: drumBuf, bass: bassBuf };
             
@@ -209,10 +272,14 @@ export default function RhythmGame() {
         } else {
             let arrayBuffer: ArrayBuffer;
             if (selectedSong.type === 'remote') {
-                const res = await fetch(selectedSong.url!);
-                arrayBuffer = await res.arrayBuffer();
+                const buffer = await fetchWithProgress(selectedSong.url!, (loaded, total) => {
+                  if (total > 0) setLoadingProgress(Math.floor((loaded / total) * 100));
+                });
+                if (!buffer) throw new Error("Failed to download song");
+                arrayBuffer = buffer;
             } else {
                 arrayBuffer = await getSongBuffer(selectedSong.dbId!);
+                setLoadingProgress(100);
             }
             const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
             audioBufferRef.current = decodedBuffer;
@@ -224,6 +291,7 @@ export default function RhythmGame() {
         await analyzeAndGenerateBeatMap(analyzeBuffer!, difficulty);
         setIsAnalyzing(false);
         
+        await preloadTexture;
         setSelectedSong(null);
         startGame();
     } catch (err) {
@@ -543,16 +611,7 @@ export default function RhythmGame() {
     const octx = offscreenCanvas.getContext('2d');
     
     if (octx) {
-      octx.fillStyle = '#050505';
-      octx.fillRect(0, 0, width, height);
-
-      octx.fillStyle = '#111111';
-      octx.beginPath();
-      octx.moveTo(getScreenX(-250, START_Z), getScreenY(START_Z));
-      octx.lineTo(getScreenX(250, START_Z), getScreenY(START_Z));
-      octx.lineTo(getScreenX(250, -200), getScreenY(-200));
-      octx.lineTo(getScreenX(-250, -200), getScreenY(-200));
-      octx.fill();
+      octx.clearRect(0, 0, width, height);
 
       octx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
       octx.lineWidth = 1;
@@ -598,8 +657,17 @@ export default function RhythmGame() {
     const notes: Note[] = [];
     const activeHolds: (Note | null)[] = [null, null, null, null, null];
     let animationId: number;
+    let trackScrollY = 0;
 
     const update = (deltaTime: number) => {
+      // Update background track texture scroll
+      const currentSpeedZ = getSpeed() * 200;
+      trackScrollY += currentSpeedZ * deltaTime; 
+      const trackSurface = document.getElementById('trackSurface');
+      if (trackSurface) {
+          trackSurface.style.backgroundPositionY = `${trackScrollY + 100}px`;
+      }
+
       for (let i = notes.length - 1; i >= 0; i--) {
         const note = notes[i];
         note.z -= note.speedZ * deltaTime;
@@ -737,9 +805,9 @@ export default function RhythmGame() {
       // Smooth Horizon Fade (Distance Fade)
       const horizonY = getScreenY(START_Z);
       const fadeGrad = ctx.createLinearGradient(0, horizonY - 50, 0, horizonY + 200);
-      fadeGrad.addColorStop(0, '#050505');
-      fadeGrad.addColorStop(0.3, '#050505'); // Ensure the sharp cut is completely covered
-      fadeGrad.addColorStop(1, 'rgba(5, 5, 5, 0)');
+      fadeGrad.addColorStop(0, '#000000');
+      fadeGrad.addColorStop(0.3, '#000000'); // Ensure the sharp cut is completely covered
+      fadeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       
       ctx.fillStyle = fadeGrad;
       ctx.fillRect(0, 0, width, horizonY + 200);
@@ -795,6 +863,7 @@ export default function RhythmGame() {
 
       if (startGameRequestRef.current) {
         startGameRequestRef.current = false;
+        trackScrollY = 0;
         notes.length = 0;
         spawnedIndexRef.current = 0;
         currentScoreRef.current = 0;
@@ -1175,15 +1244,52 @@ export default function RhythmGame() {
       </div>
 
       <div className="relative w-full max-w-[500px] flex justify-center z-10 aspect-[5/8]">
-        <div className="relative w-full h-full shadow-2xl rounded-xl p-1 bg-gradient-to-b from-white/10 to-transparent flex flex-col">
+        <div className="relative w-full h-full shadow-2xl rounded-xl p-1 bg-gradient-to-b from-white/10 to-[#0c0c0c] flex flex-col overflow-hidden">
           
           {/* Game Canvas Container */}
-          <canvas
-            ref={canvasRef}
-            width={500}
-            height={800}
-            className="w-full h-auto bg-[#0c0c0c] rounded-lg block touch-none"
-          />
+          <div className="relative w-full h-full overflow-hidden rounded-lg bg-[#000000]" style={{ containerType: 'size' }}>
+            
+            {/* 3D Track Container matching the 500x800 internal coordinates exactly */}
+            <div 
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "500px",
+                height: "800px",
+                transformOrigin: "top left",
+                transform: "scale(calc(100cqw / 500))",
+                perspective: "300px",
+                perspectiveOrigin: "250px 150px",
+                zIndex: 0
+              }}
+            >
+              {/* The floor plane mapped to Game's Z coordinate */}
+              <div 
+                 id="trackSurface" 
+                 style={{
+                   position: 'absolute',
+                   left: '0px',
+                   width: '500px',
+                   bottom: '0px', 
+                   height: '20100px', 
+                   transformOrigin: 'bottom center',
+                   transform: 'rotateX(90deg)', 
+                   backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')",
+                   backgroundRepeat: "repeat",
+                   backgroundSize: "500px 500px",
+                   opacity: 0.9
+                 }}
+              />
+            </div>
+
+            <canvas
+              ref={canvasRef}
+              width={500}
+              height={800}
+              className="absolute inset-0 w-full h-full block touch-none z-10 bg-transparent"
+            />
+          </div>
           
           {/* Game UI Overlay */}
           {(gameState === 'game' || gameState === 'countdown' || gameState === 'resuming') && (
@@ -1390,9 +1496,12 @@ export default function RhythmGame() {
       {isLoadingSong || isAnalyzing ? (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] backdrop-blur-sm transition-all animate-in fade-in duration-300">
           <div className="text-center px-6">
-            <div className="relative w-24 h-24 mx-auto mb-8">
+            <div className="relative w-24 h-24 mx-auto mb-8 flex items-center justify-center">
                 <div className="absolute inset-0 border-4 border-emerald-500/20 rounded-full"></div>
                 <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="text-emerald-500 font-black text-xl z-10">
+                    {isLoadingSong && !isAnalyzing ? `${loadingProgress}%` : ""}
+                </div>
             </div>
             <h3 className="text-emerald-500 font-black text-2xl tracking-[0.2em] uppercase mb-3 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
               {isAnalyzing ? "Analyzing Spectrum" : "Loading Track"}

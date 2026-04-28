@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 24: Enhanced Audio Penalty Feedback. Implemented a reactive 1.5-second mute penalty on note misses that resets with consecutive errors. Successful note hits now instantly restore audio volume for immediate positive feedback.",
+  "description": "Step 28: Perfected 3D Track Perspective Projection. Re-engineered the CSS 3D structure to mathematically replicate the pseudo-3D game engine's projection using local 500x800 coordinate systems scaled dynamically with cqw. Aligned the vanishing point perfectly with canvas coordinates and fixed the texture scroll scale coefficient.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
