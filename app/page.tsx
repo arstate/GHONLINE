@@ -110,10 +110,10 @@ export default function RhythmGame() {
   const [score, setScore] = useState(0); // keep for lobby if needed
   const currentScoreRef = useRef(0);
   const [isReady, setIsReady] = useState(false);
-  const [gameState, setGameState] = useState<'lobby' | 'countdown' | 'game' | 'postgame'>('lobby');
+  const [gameState, setGameState] = useState<'lobby' | 'countdown' | 'game' | 'paused' | 'resuming' | 'postgame'>('lobby');
   const [bpm, setBpm] = useState<number>(0);
   const bpmRef = useRef<number>(0);
-  const gameStateRef = useRef<'lobby' | 'countdown' | 'game' | 'postgame'>('lobby');
+  const gameStateRef = useRef<'lobby' | 'countdown' | 'game' | 'paused' | 'resuming' | 'postgame'>('lobby');
   const countdownRef = useRef<number | null>(null);
   const audioGainNodeRef = useRef<GainNode | null>(null);
   const [difficulty, setDifficulty] = useState('normal');
@@ -444,6 +444,43 @@ export default function RhythmGame() {
     console.log(`Estimated BPM: ${calculatedBpm} via mode interval clustering.`);
   };
 
+  const pauseGame = () => {
+    if (gameStateRef.current === 'game') {
+        setGameState('paused');
+        gameStateRef.current = 'paused';
+        if (audioCtxRef.current) {
+            audioCtxRef.current.suspend();
+        }
+    }
+  };
+
+  const resumeGame = () => {
+    if (gameStateRef.current === 'paused') {
+        setGameState('resuming');
+        gameStateRef.current = 'resuming';
+        countdownRef.current = 5;
+        
+        let count = 5;
+        const interval = setInterval(() => {
+          if (gameStateRef.current !== 'resuming') {
+              clearInterval(interval);
+              return;
+          }
+          count -= 1;
+          countdownRef.current = count;
+          if (count < 0) {
+              clearInterval(interval);
+              setGameState('game');
+              gameStateRef.current = 'game';
+              countdownRef.current = null;
+              if (audioCtxRef.current) {
+                  audioCtxRef.current.resume();
+              }
+          }
+        }, 1000);
+    }
+  };
+
   const startGame = () => {
     setGameState('countdown');
     gameStateRef.current = 'countdown';
@@ -707,7 +744,7 @@ export default function RhythmGame() {
       ctx.fillStyle = fadeGrad;
       ctx.fillRect(0, 0, width, horizonY + 200);
 
-      if (gameStateRef.current === 'countdown') {
+      if (gameStateRef.current === 'countdown' || gameStateRef.current === 'resuming') {
           const txt = countdownRef.current === 0 ? "GO!" : (countdownRef.current?.toString() || "");
           if (txt) {
             ctx.fillStyle = '#ffffff';
@@ -975,7 +1012,7 @@ export default function RhythmGame() {
                     // Valid early finish (tolerance)
                     notes.splice(idx, 1);
                 } else {
-                    triggerMiss();
+                    // User released early but according to request we don't mute audio
                     holdNote!.isActiveHold = false;
                     holdNote!.missed = true;
                 }
@@ -986,7 +1023,13 @@ export default function RhythmGame() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (key in keyMap) {
+      if (e.key === 'Escape') {
+        if (gameStateRef.current === 'game') {
+            pauseGame();
+        } else if (gameStateRef.current === 'paused') {
+            resumeGame();
+        }
+      } else if (key in keyMap) {
         triggerHit(keyMap[key]);
       }
     };
@@ -1115,13 +1158,59 @@ export default function RhythmGame() {
           />
           
           {/* Game UI Overlay */}
-          {(gameState === 'game' || gameState === 'countdown') && (
+          {(gameState === 'game' || gameState === 'countdown' || gameState === 'resuming') && (
             <div className="absolute top-4 left-4 right-4 flex justify-between pointer-events-none z-30">
               <div id="scoreDisplayGame" className="text-3xl font-black tracking-tighter text-white drop-shadow-md">
                 000000
               </div>
-              <div className="text-sm font-bold tracking-widest text-emerald-400 drop-shadow-md mt-1">
-                BPM: {bpm}
+              <div className="flex gap-4 pointer-events-auto items-center">
+                <div className="text-sm font-bold tracking-widest text-emerald-400 drop-shadow-md mt-1 mr-2">
+                  BPM: {bpm}
+                </div>
+                {gameState === 'game' && (
+                  <button 
+                    onClick={pauseGame}
+                    className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition-all backdrop-blur-md"
+                    aria-label="Pause Game"
+                  >
+                     <div className="flex gap-1.5 pl-0.5">
+                         <div className="w-1.5 h-4 bg-white rounded-sm"></div>
+                         <div className="w-1.5 h-4 bg-white rounded-sm"></div>
+                     </div>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Pause Menu Overlay */}
+          {gameState === 'paused' && (
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-md flex flex-col items-center justify-center z-50 text-center rounded-lg border border-white/10 p-8 shadow-2xl">
+              <h2 className="text-3xl font-black text-white mb-8 tracking-widest uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                Paused
+              </h2>
+              <div className="flex flex-col gap-4 w-full max-w-xs">
+                  <button 
+                      onClick={resumeGame}
+                      className="w-full px-6 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                  >
+                    Resume
+                  </button>
+                  <button 
+                      onClick={() => {
+                        setGameState('lobby');
+                        gameStateRef.current = 'lobby';
+                        if (audioSourcesRef.current) {
+                            audioSourcesRef.current.forEach(s => { try { s.stop(); } catch(e){} });
+                        }
+                        if (audioCtxRef.current) {
+                            audioCtxRef.current.resume(); // Ensure it's not permanently suspended
+                        }
+                      }}
+                      className="w-full px-6 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg uppercase tracking-wider transition-all backdrop-blur-md border border-white/5 active:scale-95"
+                  >
+                    Back to Lobby
+                  </button>
               </div>
             </div>
           )}

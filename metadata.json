@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 20: Horizon distance fade effect. Added a linear gradient overlay over the far edge of the lane, making incoming notes fade into view smoothly rather than abruptly popping into existence.",
+  "description": "Step 22: Refined Pause & Hold Note Mechanics. The pause blur and dark overlay now only appear while the pause menu is actively showing, leaving the background clear during the 5-second resume countdown. Early successful releases of Hold Notes no longer trigger misses or mute audio.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
