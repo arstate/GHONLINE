@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 31: Track Performance Optimization and Input Fixes. Swapped out the expensive moving `background-position` CSS property for a hardware-accelerated `translateY` transform on a smaller clipping wrapper to drastically improve scrolling frame rates on PC and mobile. Also added `pointer-events: none` to the CSS track element and `onContextMenu` prevention on the canvas so right-clicking or holding keys doesn't trigger the browser menu.",
+  "description": "Step 33: Ultimate Polish. Perfected the 3D track texture alignment vertically, resolving any gaps between the perspective focal point and origin. Enhanced the 3D retro cylindrical beat notes by elevating the inner white circular top-caps into 3D raised buttons with height, making them vividly pop against their respective colored note bodies.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

@@ -704,7 +704,7 @@ export default function RhythmGame() {
       trackScrollY += currentSpeedZ * deltaTime; 
       const trackSurface = document.getElementById('trackSurface');
       if (trackSurface) {
-          trackSurface.style.transform = `translateY(${trackScrollY % 500}px)`;
+          trackSurface.style.transform = `translateY(${(trackScrollY / 4) % 125}px)`;
       }
 
       for (let i = notes.length - 1; i >= 0; i--) {
@@ -822,21 +822,79 @@ export default function RhythmGame() {
 
         const x = getScreenX(offset, note.z);
         const y = getScreenY(note.z);
-        const radX = 35 * scale;
-        const radY = 12 * scale;
         
+        const bottomRadX = 35 * scale;
+        const bottomRadY = 12 * scale;
+        const innerBottomRadX = 31 * scale;
+        const innerBottomRadY = 10.5 * scale;
+        const topRadX = 18 * scale;
+        const topRadY = 6 * scale;
+        const noteHeight = 14 * scale;
+        const topY = y - noteHeight;
+        
+        const noteColor = note.missed ? '#64748b' : color;
+
+        // 1. Bottom White Rim
+        ctx.fillStyle = '#e2e8f0';
         ctx.beginPath();
-        ctx.ellipse(x, y, radX, radY, 0, 0, Math.PI * 2);
+        ctx.ellipse(x, y, bottomRadX, bottomRadY, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Main Body
+        const bodyGradient = ctx.createLinearGradient(x - innerBottomRadX, 0, x + innerBottomRadX, 0);
+        bodyGradient.addColorStop(0, '#000000');
+        bodyGradient.addColorStop(0.3, noteColor);
+        bodyGradient.addColorStop(0.7, noteColor);
+        bodyGradient.addColorStop(1, '#000000');
         
-        const gradient = ctx.createRadialGradient(x, y - radY*0.5, radX*0.1, x, y, radX);
-        gradient.addColorStop(0, note.missed ? '#888888' : '#ffffff');
-        gradient.addColorStop(0.3, color);
-        gradient.addColorStop(1, '#000000');
+        ctx.fillStyle = bodyGradient;
         
-        ctx.fillStyle = gradient;
+        // Lower colored ellipse
+        ctx.beginPath();
+        ctx.ellipse(x, y, innerBottomRadX, innerBottomRadY, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.lineWidth = 2 * scale;
+        // Polygon connecting to top
+        ctx.beginPath();
+        ctx.moveTo(x - innerBottomRadX, y);
+        ctx.lineTo(x + innerBottomRadX, y);
+        ctx.lineTo(x + topRadX, topY);
+        ctx.lineTo(x - topRadX, topY);
+        ctx.fill();
+        
+        // Top colored ellipse
+        ctx.fillStyle = noteColor; // bright top
+        ctx.beginPath();
+        ctx.ellipse(x, topY, topRadX, topRadY, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 3. Inner White Raised Button
+        const buttonRadX = topRadX * 0.4; // Not too big so beat color is visible
+        const buttonRadY = topRadY * 0.4;
+        const buttonHeight = 5 * scale;
+        const buttonTopY = topY - buttonHeight;
+
+        // Button side (shaded)
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.ellipse(x, topY, buttonRadX, buttonRadY, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(x - buttonRadX, topY);
+        ctx.lineTo(x + buttonRadX, topY);
+        ctx.lineTo(x + buttonRadX, buttonTopY);
+        ctx.lineTo(x - buttonRadX, buttonTopY);
+        ctx.fill();
+
+        // Button top (bright white)
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 6 * scale;
+        ctx.beginPath();
+        ctx.ellipse(x, buttonTopY, buttonRadX, buttonRadY, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
         ctx.strokeStyle = note.missed ? '#aaaaaa' : '#fff';
         ctx.stroke();
       }
@@ -1282,7 +1340,14 @@ export default function RhythmGame() {
         <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] bg-orange-900/10 blur-[120px] rounded-full"></div>
       </div>
 
-      <div className="relative w-full max-w-[500px] flex justify-center z-10 aspect-[5/8]">
+      <div 
+         className="relative w-full max-w-[500px] flex justify-center z-10 aspect-[5/8]"
+         style={{
+           WebkitTouchCallout: 'none',
+           WebkitUserSelect: 'none',
+           userSelect: 'none'
+         }}
+      >
         <div className="relative w-full h-full shadow-2xl rounded-xl p-1 bg-gradient-to-b from-white/10 to-[#0c0c0c] flex flex-col overflow-hidden">
           
           {/* Game Canvas Container */}
@@ -1310,12 +1375,11 @@ export default function RhythmGame() {
                    position: 'absolute',
                    left: '0px',
                    width: '500px',
-                   bottom: '0px', 
-                   height: '3100px', 
-                   transformOrigin: 'center 3000px', 
-                   transform: 'rotateX(90deg)', 
+                   top: '0px', 
+                   height: '1000px', 
+                   transformOrigin: 'center 700px', 
+                   transform: 'rotateX(90deg) scaleY(4)', 
                    overflow: 'hidden',
-                   opacity: 0.9,
                    pointerEvents: 'none'
                  }}
               >
@@ -1326,10 +1390,10 @@ export default function RhythmGame() {
                      left: '0px',
                      bottom: '0px',
                      width: '500px',
-                     height: '3600px', 
+                     height: '1500px', 
                      backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')",
                      backgroundRepeat: "repeat",
-                     backgroundSize: "500px 500px",
+                     backgroundSize: "500px 125px",
                      willChange: 'transform'
                    }}
                 />
