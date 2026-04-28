@@ -34,23 +34,33 @@ export function useGameLoop({
   audioCtxRef,
   audioBufferRef,
   audioSourcesRef,
-  audioGainNodeRef,
+  audioGainNodeRef, // Now used as P1 or Single gain
+  audioGainP2Ref,   // New: specifically for P2 (drums) in multiplayer
   beatMapRef,
+  beatMapP2Ref,
   difficulty,
   instrumentMode,
+  gameMode, // 'single' | 'multiplayer'
   setGameState,
   setScore,
   onGameEnd,
-  keyMappings
+  p1Keys,
+  p2Keys
 }: any) {
-  const notesRef = useRef<Note[]>([]);
-  const spawnedIndexRef = useRef(0);
+  const notesP1Ref = useRef<Note[]>([]);
+  const notesP2Ref = useRef<Note[]>([]);
+  const spawnedIndexP1Ref = useRef(0);
+  const spawnedIndexP2Ref = useRef(0);
   const startTimeRef = useRef(0);
-  const activeLanesRef = useRef([false, false, false, false, false]);
-  const activeHoldsRef = useRef<(Note | null)[]>([null, null, null, null, null]);
-  const currentScoreRef = useRef(0);
+  const activeLanesP1Ref = useRef([false, false, false, false, false]);
+  const activeLanesP2Ref = useRef([false, false, false, false, false]);
+  const activeHoldsP1Ref = useRef<(Note | null)[]>([null, null, null, null, null]);
+  const activeHoldsP2Ref = useRef<(Note | null)[]>([null, null, null, null, null]);
+  const scoreP1Ref = useRef(0);
+  const scoreP2Ref = useRef(0);
   const startGameRequestRef = useRef(false);
-  const laneHitStatesRef = useRef([0, 0, 0, 0, 0]);
+  const laneHitStatesP1Ref = useRef([0, 0, 0, 0, 0]);
+  const laneHitStatesP2Ref = useRef([0, 0, 0, 0, 0]);
   const trackScrollYRef = useRef(0);
   
   const FOCAL_LENGTH = 250;
@@ -62,15 +72,22 @@ export function useGameLoop({
     return speedMap[difficulty] || 600;
   }, [difficulty]);
 
-  const syncScoreUI = useCallback((val: number) => {
-    const str = val.toString().padStart(6, '0');
+  const syncScoreUI = useCallback(() => {
     const s1 = document.getElementById('scoreDisplay');
     const s2 = document.getElementById('scoreDisplayGame');
-    if (s1) s1.innerText = str;
-    if (s2) s2.innerText = str;
-  }, []);
+    if (gameMode === 'multiplayer') {
+      const p1Str = scoreP1Ref.current.toString().padStart(6, '0');
+      const p2Str = scoreP2Ref.current.toString().padStart(6, '0');
+      if (s1) s1.innerText = `${p1Str} | ${p2Str}`;
+      if (s2) s2.innerText = `${p1Str} | ${p2Str}`;
+    } else {
+      const str = scoreP1Ref.current.toString().padStart(6, '0');
+      if (s1) s1.innerText = str;
+      if (s2) s2.innerText = str;
+    }
+  }, [gameMode]);
 
-  const triggerMiss = useCallback(() => {
+  const triggerMissP1 = useCallback(() => {
     if (audioGainNodeRef.current && audioCtxRef.current) {
         const ctx = audioCtxRef.current;
         const now = ctx.currentTime;
@@ -82,13 +99,26 @@ export function useGameLoop({
     }
   }, [audioGainNodeRef, audioCtxRef]);
 
-  const triggerHit = useCallback((laneIndex: number) => {
-    if (activeLanesRef.current[laneIndex]) return;
-    activeLanesRef.current[laneIndex] = true;
+  const triggerMissP2 = useCallback(() => {
+    const gain = gameMode === 'multiplayer' ? audioGainP2Ref.current : audioGainNodeRef.current;
+    if (gain && audioCtxRef.current) {
+        const ctx = audioCtxRef.current;
+        const now = ctx.currentTime;
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.02);
+        gain.gain.setValueAtTime(0, now + 1.5);
+        gain.gain.linearRampToValueAtTime(1.0, now + 1.55);
+    }
+  }, [audioGainP2Ref, audioGainNodeRef, audioCtxRef, gameMode]);
+
+  const triggerHitP1 = useCallback((laneIndex: number) => {
+    if (activeLanesP1Ref.current[laneIndex]) return;
+    activeLanesP1Ref.current[laneIndex] = true;
     
     let hitIndex = -1;
     let minDiff = Infinity;
-    const notes = notesRef.current;
+    const notes = notesP1Ref.current;
 
     for (let j = 0; j < notes.length; j++) {
         const note = notes[j];
@@ -107,37 +137,102 @@ export function useGameLoop({
             audioGainNodeRef.current.gain.cancelScheduledValues(now);
             audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.02);
         }
-
         const note = notes[hitIndex];
         if (note.type === 'tap') {
             notes.splice(hitIndex, 1);
-            currentScoreRef.current += (minDiff <= 50 ? 10 : 5);
-            laneHitStatesRef.current[laneIndex] = 0.15; // 150ms visual feedback
+            scoreP1Ref.current += (minDiff <= 50 ? 10 : 5);
+            laneHitStatesP1Ref.current[laneIndex] = 0.15;
+            
+            // Restore audio on hit
+            if (audioGainNodeRef.current && audioCtxRef.current) {
+                const now = audioCtxRef.current.currentTime;
+                audioGainNodeRef.current.gain.cancelScheduledValues(now);
+                audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.1);
+            }
         } else if (note.type === 'hold') {
             note.isActiveHold = true;
-            activeHoldsRef.current[laneIndex] = note;
-            currentScoreRef.current += (minDiff <= 50 ? 10 : 5);
+            activeHoldsP1Ref.current[laneIndex] = note;
+            scoreP1Ref.current += (minDiff <= 50 ? 10 : 5);
         }
-        syncScoreUI(currentScoreRef.current);
+        syncScoreUI();
     } else {
-        if (gameStateRef.current === 'game') triggerMiss();
+        if (gameStateRef.current === 'game') triggerMissP1();
     }
-  }, [gameStateRef, audioGainNodeRef, audioCtxRef, triggerMiss, syncScoreUI]);
+  }, [gameStateRef, audioGainNodeRef, audioCtxRef, triggerMissP1, syncScoreUI]);
 
-  const triggerRelease = useCallback((laneIndex: number) => {
-    activeLanesRef.current[laneIndex] = false;
-    const holdNote = activeHoldsRef.current[laneIndex];
-    if (holdNote) {
-        const idx = notesRef.current.indexOf(holdNote);
-        if (idx !== -1) {
-            if (holdNote.lengthZ <= 50) {
-                notesRef.current.splice(idx, 1);
-            } else {
-                holdNote.isActiveHold = false;
-                holdNote.missed = true;
+  const triggerHitP2 = useCallback((laneIndex: number) => {
+    if (activeLanesP2Ref.current[laneIndex]) return;
+    activeLanesP2Ref.current[laneIndex] = true;
+    
+    let hitIndex = -1;
+    let minDiff = Infinity;
+    const notes = notesP2Ref.current;
+
+    for (let j = 0; j < notes.length; j++) {
+        const note = notes[j];
+        if (note.lane === laneIndex && !note.isActiveHold && !note.missed) {
+            const diff = Math.abs(note.z);
+            if (diff < 150 && diff < minDiff) { 
+               minDiff = diff;
+               hitIndex = j;
             }
         }
-        activeHoldsRef.current[laneIndex] = null;
+    }
+    
+    if (hitIndex !== -1) {
+        const gain = gameMode === 'multiplayer' ? audioGainP2Ref.current : audioGainNodeRef.current;
+        if (gain && audioCtxRef.current) {
+            const now = audioCtxRef.current.currentTime;
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.linearRampToValueAtTime(1.0, now + 0.02);
+        }
+        const note = notes[hitIndex];
+        if (note.type === 'tap') {
+            notes.splice(hitIndex, 1);
+            scoreP2Ref.current += (minDiff <= 50 ? 10 : 5);
+            laneHitStatesP2Ref.current[laneIndex] = 0.15;
+
+            // Restore audio on hit
+            const gain = gameMode === 'multiplayer' ? audioGainP2Ref.current : audioGainNodeRef.current;
+            if (gain && audioCtxRef.current) {
+                const now = audioCtxRef.current.currentTime;
+                gain.gain.cancelScheduledValues(now);
+                gain.gain.linearRampToValueAtTime(1.0, now + 0.1);
+            }
+        } else if (note.type === 'hold') {
+            note.isActiveHold = true;
+            activeHoldsP2Ref.current[laneIndex] = note;
+            scoreP2Ref.current += (minDiff <= 50 ? 10 : 5);
+        }
+        syncScoreUI();
+    } else {
+        if (gameStateRef.current === 'game') triggerMissP2();
+    }
+  }, [gameStateRef, audioGainP2Ref, audioGainNodeRef, audioCtxRef, triggerMissP2, syncScoreUI, gameMode]);
+
+  const triggerReleaseP1 = useCallback((laneIndex: number) => {
+    activeLanesP1Ref.current[laneIndex] = false;
+    const holdNote = activeHoldsP1Ref.current[laneIndex];
+    if (holdNote) {
+        const idx = notesP1Ref.current.indexOf(holdNote);
+        if (idx !== -1) {
+            if (holdNote.lengthZ <= 50) notesP1Ref.current.splice(idx, 1);
+            else { holdNote.isActiveHold = false; holdNote.missed = true; }
+        }
+        activeHoldsP1Ref.current[laneIndex] = null;
+    }
+  }, []);
+
+  const triggerReleaseP2 = useCallback((laneIndex: number) => {
+    activeLanesP2Ref.current[laneIndex] = false;
+    const holdNote = activeHoldsP2Ref.current[laneIndex];
+    if (holdNote) {
+        const idx = notesP2Ref.current.indexOf(holdNote);
+        if (idx !== -1) {
+            if (holdNote.lengthZ <= 50) notesP2Ref.current.splice(idx, 1);
+            else { holdNote.isActiveHold = false; holdNote.missed = true; }
+        }
+        activeHoldsP2Ref.current[laneIndex] = null;
     }
   }, []);
 
@@ -149,18 +244,18 @@ export function useGameLoop({
 
     const width = 1280;
     const height = 720;
-    const VP_X = width / 2;
     const VP_Y = 180;
     const FOCAL_LENGTH = 400;
     const BASE_Y_OFFSET = 440;
-    const LANE_GAP = 140;
+    const LANE_GAP = gameMode === 'multiplayer' ? 70 : 140;
     
     const getScale = (z: number) => Math.max(0.01, FOCAL_LENGTH / (FOCAL_LENGTH + Math.max(z, -FOCAL_LENGTH + 10)));
-    const getScreenX = (offsetX: number, z: number) => VP_X + offsetX * getScale(z);
+    const getScreenX = (offsetX: number, z: number, vpX: number) => vpX + offsetX * getScale(z);
     const getScreenY = (z: number) => VP_Y + BASE_Y_OFFSET * getScale(z);
 
     const drawPuck = (ctx: CanvasRenderingContext2D, x: number, y: number, color: string, scale: number, missed: boolean, isHit: boolean = false) => {
-      const bRX = 50 * scale, bRY = 18 * scale, iBRX = 45 * scale, iBRY = 15 * scale, tRX = 25 * scale, tRY = 9 * scale, nH = 20 * scale;
+      const baseSize = gameMode === 'multiplayer' ? 25 : 50;
+      const bRX = baseSize * scale, bRY = (baseSize * 0.36) * scale, iBRX = (baseSize * 0.9) * scale, iBRY = (baseSize * 0.3) * scale, tRX = (baseSize * 0.5) * scale, tRY = (baseSize * 0.18) * scale, nH = (baseSize * 0.4) * scale;
       const tY = y - nH, nC = missed ? '#64748b' : color;
       
       // Base glow if hit
@@ -198,40 +293,6 @@ export function useGameLoop({
       ctx.stroke();
     };
 
-    const offscreen = document.createElement('canvas');
-    offscreen.width = width;
-    offscreen.height = height;
-    const octx = offscreen.getContext('2d');
-    if (octx) {
-      octx.save();
-      octx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-      octx.shadowBlur = 10;
-      octx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      octx.lineWidth = 3;
-      octx.beginPath();
-      octx.moveTo(getScreenX(-350, START_Z), getScreenY(START_Z));
-      octx.lineTo(getScreenX(-350, -200), getScreenY(-200));
-      octx.stroke();
-      octx.beginPath();
-      octx.moveTo(getScreenX(350, START_Z), getScreenY(START_Z));
-      octx.lineTo(getScreenX(350, -200), getScreenY(-200));
-      octx.stroke();
-      octx.restore();
-      octx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-      for (let i = 1; i <= 4; i++) {
-         const offset = (i - 2.5) * LANE_GAP;
-         octx.beginPath();
-         octx.moveTo(getScreenX(offset, START_Z), getScreenY(START_Z));
-         octx.lineTo(getScreenX(offset, -200), getScreenY(-200));
-         octx.stroke();
-      }
-      octx.strokeStyle = 'rgba(16, 185, 129, 0.5)';
-      octx.lineWidth = 2;
-      octx.beginPath();
-      octx.moveTo(getScreenX(-350, 0), getScreenY(0));
-      octx.lineTo(getScreenX(350, 0), getScreenY(0));
-      octx.stroke();
-    }
 
     let animationId: number;
     let lastFrameTime = performance.now();
@@ -241,70 +302,65 @@ export function useGameLoop({
       const deltaTime = Math.min((time - lastFrameTime) / 1000, 0.1);
       lastFrameTime = time;
 
-      // Gamepad handling
+      // Handle Gamepads for both P1 and P2
       const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
       for (const gp of gamepads) {
         if (!gp) continue;
         gp.buttons.forEach((btn, idx) => {
           const mapping = `gp:${idx}`;
-          const laneIdx = keyMappings.findIndex((m: string) => m.toLowerCase() === mapping);
-          if (laneIdx !== -1) {
-            if (btn.pressed && !lastGamepadState.current[idx]) triggerHit(laneIdx);
-            else if (!btn.pressed && lastGamepadState.current[idx]) triggerRelease(laneIdx);
-            lastGamepadState.current[idx] = btn.pressed;
+          const p1Lane = (p1Keys as string[]).findIndex(m => m.toLowerCase() === mapping);
+          const p2Lane = (p2Keys as string[]).findIndex(m => m.toLowerCase() === mapping);
+          
+          if (p1Lane !== -1) {
+            if (btn.pressed && !lastGamepadState.current[idx]) triggerHitP1(p1Lane);
+            else if (!btn.pressed && lastGamepadState.current[idx]) triggerReleaseP1(p1Lane);
           }
+          if (p2Lane !== -1) {
+            if (btn.pressed && !lastGamepadState.current[idx]) triggerHitP2(p2Lane);
+            else if (!btn.pressed && lastGamepadState.current[idx]) triggerReleaseP2(p2Lane);
+          }
+          lastGamepadState.current[idx] = btn.pressed;
         });
       }
 
       if (startGameRequestRef.current) {
         startGameRequestRef.current = false;
-        notesRef.current = [];
-        spawnedIndexRef.current = 0;
-        currentScoreRef.current = 0;
+        notesP1Ref.current = [];
+        notesP2Ref.current = [];
+        spawnedIndexP1Ref.current = 0;
+        spawnedIndexP2Ref.current = 0;
+        scoreP1Ref.current = 0;
+        scoreP2Ref.current = 0;
         trackScrollYRef.current = 0;
-        syncScoreUI(0);
+        syncScoreUI();
         
         if (audioCtxRef.current && audioBufferRef.current) {
-          const masterGain = audioCtxRef.current.createGain();
           const targetVol = 0.9;
           const audioBuffer = audioBufferRef.current;
+          const ctx = audioCtxRef.current;
+          const masterGain = ctx.createGain();
+          masterGain.connect(ctx.destination);
           
           if (audioBuffer instanceof AudioBuffer) {
-             const source = audioCtxRef.current.createBufferSource();
+             const source = ctx.createBufferSource();
              source.buffer = audioBuffer;
-             
-             // Safer peak calculation for large buffers
-             let peak = 0;
-             const data = source.buffer.getChannelData(0);
-             for (let i = 0; i < data.length; i += 100) {
-               const val = Math.abs(data[i]);
-               if (val > peak) peak = val;
-             }
-             
-             masterGain.gain.value = peak > 0 ? targetVol / peak : 1.0;
-             const penalty = audioCtxRef.current.createGain();
+             source.connect(masterGain);
+             const penalty = ctx.createGain();
              audioGainNodeRef.current = penalty;
-             source.connect(masterGain).connect(penalty).connect(audioCtxRef.current.destination);
+             source.connect(penalty); // Link P1/Single penalty
              audioSourcesRef.current = [source];
              source.start();
-             startTimeRef.current = audioCtxRef.current.currentTime;
+             startTimeRef.current = ctx.currentTime;
           } else {
              const stems = ['vocals', 'other', 'drums', 'bass'] as const;
              const buffers = audioBuffer as any;
-             let maxPeak = 0;
-             const len = Math.min(...stems.map(s => buffers[s].getChannelData(0).length));
-             for(let i=0; i<len; i+=100) {
-                const s = Math.abs(stems.reduce((acc, stem) => acc + buffers[stem].getChannelData(0)[i], 0));
-                if(s > maxPeak) maxPeak = s;
-             }
-             masterGain.gain.value = maxPeak > 0 ? targetVol / maxPeak : 1.0;
-             masterGain.connect(audioCtxRef.current.destination);
-             const startT = audioCtxRef.current.currentTime;
+             const startT = ctx.currentTime;
              stems.forEach(stem => {
-                const src = audioCtxRef.current!.createBufferSource();
+                const src = ctx.createBufferSource();
                 src.buffer = buffers[stem];
-                const g = audioCtxRef.current!.createGain();
-                if((instrumentMode === stem) || (instrumentMode === 'other' && stem === 'other')) audioGainNodeRef.current = g;
+                const g = ctx.createGain();
+                if (stem === 'other') audioGainNodeRef.current = g;
+                if (stem === 'drums') audioGainP2Ref.current = g;
                 src.connect(g).connect(masterGain);
                 audioSourcesRef.current.push(src);
                 src.start(startT);
@@ -328,115 +384,170 @@ export function useGameLoop({
         }
         const speed = getSpeedZ();
         trackScrollYRef.current += speed * deltaTime * 0.95;
-        const ts = document.getElementById('trackSurface');
-        if (ts) ts.style.transform = `translateY(${(trackScrollYRef.current % 640)}px)`;
+        const ts1 = document.getElementById('trackSurfaceP1');
+        const ts2 = document.getElementById('trackSurfaceP2');
+        if (ts1) ts1.style.transform = `translateY(${(trackScrollYRef.current % 640)}px)`;
+        if (ts2) ts2.style.transform = `translateY(${(trackScrollYRef.current % 640)}px)`;
 
         if (audioCtxRef.current) {
           const pbTime = audioCtxRef.current.currentTime - startTimeRef.current;
           const fallT = START_Z / speed;
-          const beats = beatMapRef.current;
-          while (spawnedIndexRef.current < beats.length) {
-            const beat = beats[spawnedIndexRef.current];
+          
+          // Spawn P1
+          const beatsP1 = beatMapRef.current;
+          while (spawnedIndexP1Ref.current < beatsP1.length) {
+            const beat = beatsP1[spawnedIndexP1Ref.current];
             if (pbTime >= beat.time - fallT) {
-              beat.notes.forEach((bn: any) => {
-                notesRef.current.push(new Note(bn.lane, START_Z, speed, bn.type, bn.duration * speed));
-              });
-              spawnedIndexRef.current++;
+              beat.notes.forEach((bn: any) => notesP1Ref.current.push(new Note(bn.lane, START_Z, speed, bn.type, bn.duration * speed)));
+              spawnedIndexP1Ref.current++;
+            } else break;
+          }
+          
+          // Spawn P2
+          const beatsP2 = gameMode === 'multiplayer' ? beatMapP2Ref.current : [];
+          while (spawnedIndexP2Ref.current < beatsP2.length) {
+            const beat = beatsP2[spawnedIndexP2Ref.current];
+            if (pbTime >= beat.time - fallT) {
+              beat.notes.forEach((bn: any) => notesP2Ref.current.push(new Note(bn.lane, START_Z, speed, bn.type, bn.duration * speed)));
+              spawnedIndexP2Ref.current++;
             } else break;
           }
           
           if(audioBufferRef.current) {
             const buf = audioBufferRef.current;
             const duration = (buf instanceof AudioBuffer) ? buf.duration : (buf as any).vocals.duration;
-            if(pbTime > duration + 1.0 && spawnedIndexRef.current >= beats.length && notesRef.current.length === 0) {
-              onGameEnd(currentScoreRef.current);
+            if(pbTime > duration + 1.0 && spawnedIndexP1Ref.current >= beatsP1.length && notesP1Ref.current.length === 0 && notesP2Ref.current.length === 0) {
+              onGameEnd(scoreP1Ref.current + scoreP2Ref.current);
             }
           }
         }
 
-        for (let i = notesRef.current.length - 1; i >= 0; i--) {
-          const n = notesRef.current[i];
+        // Update P1 Notes
+        for (let i = notesP1Ref.current.length - 1; i >= 0; i--) {
+          const n = notesP1Ref.current[i];
           n.z -= n.speedZ * deltaTime;
           if (n.isActiveHold) {
-            currentScoreRef.current += 1;
-            syncScoreUI(currentScoreRef.current);
+            scoreP1Ref.current += 1;
+            syncScoreUI();
             n.lengthZ -= n.speedZ * deltaTime;
             n.z = 0;
             if (n.lengthZ <= 0) {
-              currentScoreRef.current += 50;
-              notesRef.current.splice(i, 1);
-              activeHoldsRef.current[n.lane] = null;
+              scoreP1Ref.current += 50;
+              notesP1Ref.current.splice(i, 1);
+              activeHoldsP1Ref.current[n.lane] = null;
             }
           } else {
-            if (!n.missed && n.z < -100) { triggerMiss(); n.missed = true; }
-            if ((n.type === 'hold' ? n.z + n.lengthZ : n.z) < -300) notesRef.current.splice(i, 1);
+            if (!n.missed && n.z < -100) { triggerMissP1(); n.missed = true; }
+            if ((n.type === 'hold' ? n.z + n.lengthZ : n.z) < -300) notesP1Ref.current.splice(i, 1);
+          }
+        }
+        
+        // Update P2 Notes
+        for (let i = notesP2Ref.current.length - 1; i >= 0; i--) {
+          const n = notesP2Ref.current[i];
+          n.z -= n.speedZ * deltaTime;
+          if (n.isActiveHold) {
+            scoreP2Ref.current += 1;
+            syncScoreUI();
+            n.lengthZ -= n.speedZ * deltaTime;
+            n.z = 0;
+            if (n.lengthZ <= 0) {
+              scoreP2Ref.current += 50;
+              notesP2Ref.current.splice(i, 1);
+              activeHoldsP2Ref.current[n.lane] = null;
+            }
+          } else {
+            if (!n.missed && n.z < -100) { triggerMissP2(); n.missed = true; }
+            if ((n.type === 'hold' ? n.z + n.lengthZ : n.z) < -300) notesP2Ref.current.splice(i, 1);
           }
         }
 
-        // Update hit states decay
         for (let i = 0; i < 5; i++) {
-          if (laneHitStatesRef.current[i] > 0) {
-            laneHitStatesRef.current[i] -= deltaTime;
-          }
+          if (laneHitStatesP1Ref.current[i] > 0) laneHitStatesP1Ref.current[i] -= deltaTime;
+          if (laneHitStatesP2Ref.current[i] > 0) laneHitStatesP2Ref.current[i] -= deltaTime;
         }
       }
 
       ctx.clearRect(0, 0, width, height);
-      ctx.drawImage(offscreen, 0, 0);
+      
+      const renderTrack = (notes: Note[], vpX: number, activeLanes: boolean[], activeHolds: (Note|null)[], hitStates: number[], keys: string[]) => {
+        // Draw static grid lines for this track
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+           const off = (i - 2) * LANE_GAP;
+           ctx.beginPath();
+           ctx.moveTo(getScreenX(off, START_Z, vpX), getScreenY(START_Z));
+           ctx.lineTo(getScreenX(off, -200, vpX), getScreenY(-200));
+           ctx.stroke();
+        }
+        
+        // Side border lines (White lines on the side as requested)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 3;
+        const sideOff = 2.5 * LANE_GAP;
+        [-1, 1].forEach(side => {
+          ctx.beginPath();
+          ctx.moveTo(getScreenX(side * sideOff, START_Z, vpX), getScreenY(START_Z));
+          ctx.lineTo(getScreenX(side * sideOff, -200, vpX), getScreenY(-200));
+          ctx.stroke();
+        });
 
-      const hitZ = 0;
-      for (let i = 0; i < 5; i++) {
-        const x = getScreenX((i - 2) * LANE_GAP, hitZ);
-        const y = getScreenY(hitZ);
-        const s = getScale(hitZ);
-        
-        const isHit = activeHoldsRef.current[i] !== null || laneHitStatesRef.current[i] > 0;
-        
-        ctx.beginPath();
-        ctx.ellipse(x, y, 60 * s, 22 * s, 0, 0, Math.PI * 2);
-        ctx.strokeStyle = activeLanesRef.current[i] ? '#ffffff' : COLORS[i];
-        ctx.lineWidth = activeLanesRef.current[i] ? 6 : 3;
-        ctx.stroke();
-        
-        if (isHit) {
-          drawPuck(ctx, x, y, COLORS[i], s, false, true);
-        } else if (activeLanesRef.current[i]) {
-          ctx.fillStyle = COLORS[i] + '66';
-          ctx.fill();
+        for (let i = 0; i < 5; i++) {
+          const x = getScreenX((i - 2) * LANE_GAP, 0, vpX);
+          const y = getScreenY(0);
+          const s = getScale(0);
+          const isHit = activeHolds[i] !== null || hitStates[i] > 0;
+          ctx.beginPath();
+          ctx.ellipse(x, y, (gameMode === 'multiplayer' ? 30 : 60) * s, (gameMode === 'multiplayer' ? 11 : 22) * s, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = activeLanes[i] ? '#ffffff' : COLORS[i];
+          ctx.lineWidth = activeLanes[i] ? 6 : 3;
+          ctx.stroke();
+          if (isHit) drawPuck(ctx, x, y, COLORS[i], s, false, true);
+          else if (activeLanes[i]) { 
+            ctx.fillStyle = COLORS[i] + '33'; 
+            ctx.beginPath();
+            ctx.ellipse(x, y, (gameMode === 'multiplayer' ? 30 : 60) * s, (gameMode === 'multiplayer' ? 11 : 22) * s, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          ctx.fillStyle = activeLanes[i] ? '#fff' : 'rgba(255,255,255,0.7)';
+          ctx.font = `bold ${gameMode === 'multiplayer' ? 14 : 20}px sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          const label = keys[i].length > 1 ? keys[i].substring(0, 3) : keys[i].toUpperCase();
+          ctx.fillText(label, x, y + (gameMode === 'multiplayer' ? 25 : 40));
         }
 
-        ctx.fillStyle = activeLanesRef.current[i] ? '#fff' : 'rgba(255,255,255,0.7)';
-        ctx.font = `bold ${activeLanesRef.current[i] ? 24 : 20}px sans-serif`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const label = keyMappings[i].length > 1 ? keyMappings[i].substring(0, 3) : keyMappings[i].toUpperCase();
-        ctx.fillText(label, x, y + 40);
+        const sorted = [...notes].sort((a, b) => b.z - a.z);
+        sorted.forEach(n => {
+          if (n.z > START_Z + 200) return;
+          const off = (n.lane - 2) * LANE_GAP;
+          const color = n.missed ? '#333333' : n.color; // Darker grey for missed
+          if (n.type === 'hold' && n.lengthZ > 0 && n.z <= START_Z) {
+             const bZ = n.z, tZ = Math.min(n.z + n.lengthZ, START_Z);
+             const wB = (gameMode === 'multiplayer' ? 25 : 45) * getScale(bZ), wT = (gameMode === 'multiplayer' ? 25 : 45) * getScale(tZ);
+             const xB = getScreenX(off, bZ, vpX), yB = getScreenY(bZ), xT = getScreenX(off, tZ, vpX), yT = getScreenY(tZ);
+             ctx.fillStyle = n.missed ? '#22222299' : color + '80'; 
+             ctx.beginPath();
+             ctx.moveTo(xB - wB, yB); ctx.lineTo(xB + wB, yB); ctx.lineTo(xT + wT, yT); ctx.lineTo(xT - wT, yT); ctx.fill();
+          }
+          const scale = getScale(n.z);
+          if (scale < 0.02) return;
+          drawPuck(ctx, getScreenX(off, n.z, vpX), getScreenY(n.z), n.color, scale, n.missed);
+        });
+      };
+
+      if (gameMode === 'multiplayer') {
+        renderTrack(notesP1Ref.current, width * 0.25, activeLanesP1Ref.current, activeHoldsP1Ref.current, laneHitStatesP1Ref.current, p1Keys);
+        renderTrack(notesP2Ref.current, width * 0.75, activeLanesP2Ref.current, activeHoldsP2Ref.current, laneHitStatesP2Ref.current, p2Keys);
+      } else {
+        renderTrack(notesP1Ref.current, width * 0.5, activeLanesP1Ref.current, activeHoldsP1Ref.current, laneHitStatesP1Ref.current, p1Keys);
       }
 
-      // Draw notes (Furthest to Closest)
-      const sortedNotes = [...notesRef.current].sort((a, b) => b.z - a.z);
-      sortedNotes.forEach(n => {
-        if (n.z > START_Z + 500) return;
-        ctx.shadowBlur = 0; // Reset shadow state for each note
-        const off = (n.lane - 2) * LANE_GAP;
-        const color = n.missed ? '#555555' : n.color;
-        if (n.type === 'hold' && n.lengthZ > 0 && n.z <= START_Z) {
-           const bZ = n.z, tZ = Math.min(n.z + n.lengthZ, START_Z);
-           const wB = 45 * getScale(bZ), wT = 45 * getScale(tZ);
-           const xB = getScreenX(off, bZ), yB = getScreenY(bZ), xT = getScreenX(off, tZ), yT = getScreenY(tZ);
-           ctx.fillStyle = color + '90'; ctx.beginPath();
-           ctx.moveTo(xB - wB, yB); ctx.lineTo(xB + wB, yB); ctx.lineTo(xT + wT, yT); ctx.lineTo(xT - wT, yT); ctx.fill();
-           // Remove the ellipse here as drawPuck will handle the front puck
-        }
-        const scale = getScale(n.z);
-        if (scale < 0.02) return;
-        const x = getScreenX(off, n.z), y = getScreenY(n.z);
-        drawPuck(ctx, x, y, n.color, scale, n.missed);
-      });
-
       const horizonY = getScreenY(START_Z);
-      const fG = ctx.createLinearGradient(0, horizonY - 50, 0, horizonY + 200);
-      fG.addColorStop(0, '#000'); fG.addColorStop(0.3, '#000'); fG.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = fG; ctx.fillRect(0, 0, width, horizonY + 200);
+      const fG = ctx.createLinearGradient(0, horizonY - 40, 0, horizonY + 100);
+      fG.addColorStop(0, '#000'); fG.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = fG; ctx.fillRect(0, 0, width, horizonY + 100);
 
       animationId = requestAnimationFrame(loop);
     };
@@ -445,14 +556,18 @@ export function useGameLoop({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      const laneIdx = keyMappings.findIndex((m: string) => m.toLowerCase() === k);
-      if (laneIdx !== -1) triggerHit(laneIdx);
-      else if (e.key === 'Escape') gameStateRef.current === 'game' ? setGameState('paused') : gameStateRef.current === 'paused' ? setGameState('resuming') : null;
+      const p1Idx = p1Keys.findIndex((m: string) => m.toLowerCase() === k);
+      const p2Idx = p2Keys.findIndex((m: string) => m.toLowerCase() === k);
+      if (p1Idx !== -1) triggerHitP1(p1Idx);
+      if (p2Idx !== -1) triggerHitP2(p2Idx);
+      if (e.key === 'Escape') gameStateRef.current === 'game' ? setGameState('paused') : gameStateRef.current === 'paused' ? setGameState('resuming') : null;
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      const laneIdx = keyMappings.findIndex((m: string) => m.toLowerCase() === k);
-      if (laneIdx !== -1) triggerRelease(laneIdx);
+      const p1Idx = p1Keys.findIndex((m: string) => m.toLowerCase() === k);
+      const p2Idx = p2Keys.findIndex((m: string) => m.toLowerCase() === k);
+      if (p1Idx !== -1) triggerReleaseP1(p1Idx);
+      if (p2Idx !== -1) triggerReleaseP2(p2Idx);
     };
     const handlePointerDown = (e: PointerEvent | TouchEvent) => {
       if (gameStateRef.current !== 'game') return;
@@ -461,19 +576,25 @@ export function useGameLoop({
       const rect = canvas.getBoundingClientRect();
       const scaleX = width / rect.width;
       const scaleY = height / rect.height;
-      
       const touches = 'touches' in e ? Array.from(e.changedTouches) : [e as PointerEvent];
-      
       touches.forEach(t => {
         const x = ('clientX' in t ? t.clientX : (t as any).clientX) - rect.left;
         const y = ('clientY' in t ? t.clientY : (t as any).clientY) - rect.top;
         const canvasX = x * scaleX;
         const canvasY = y * scaleY;
-        
-        // Check lane based on canvasX
-        const lane = Math.round((canvasX - VP_X) / LANE_GAP) + 2;
-        if (lane >= 0 && lane < 5 && canvasY > 300) {
-          triggerHit(lane);
+        if (canvasY > 300) {
+          if (gameMode === 'multiplayer') {
+            if (canvasX < width / 2) {
+              const lane = Math.round((canvasX - width * 0.25) / LANE_GAP) + 2;
+              if (lane >= 0 && lane < 5) triggerHitP1(lane);
+            } else {
+              const lane = Math.round((canvasX - width * 0.75) / LANE_GAP) + 2;
+              if (lane >= 0 && lane < 5) triggerHitP2(lane);
+            }
+          } else {
+            const lane = Math.round((canvasX - width * 0.5) / LANE_GAP) + 2;
+            if (lane >= 0 && lane < 5) triggerHitP1(lane);
+          }
         }
       });
     };
@@ -486,8 +607,18 @@ export function useGameLoop({
       touches.forEach(t => {
         const x = ('clientX' in t ? t.clientX : (t as any).clientX) - rect.left;
         const canvasX = x * scaleX;
-        const lane = Math.round((canvasX - VP_X) / LANE_GAP) + 2;
-        if (lane >= 0 && lane < 5) triggerRelease(lane);
+        if (gameMode === 'multiplayer') {
+           if (canvasX < width / 2) {
+             const lane = Math.round((canvasX - width * 0.25) / LANE_GAP) + 2;
+             if (lane >= 0 && lane < 5) triggerReleaseP1(lane);
+           } else {
+             const lane = Math.round((canvasX - width * 0.75) / LANE_GAP) + 2;
+             if (lane >= 0 && lane < 5) triggerReleaseP2(lane);
+           }
+        } else {
+          const lane = Math.round((canvasX - width * 0.5) / LANE_GAP) + 2;
+          if (lane >= 0 && lane < 5) triggerReleaseP1(lane);
+        }
       });
     };
 
@@ -505,7 +636,7 @@ export function useGameLoop({
       canvas.removeEventListener('pointerdown', handlePointerDown as any);
       canvas.removeEventListener('pointerup', handlePointerUp as any);
     };
-  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, beatMapRef, instrumentMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHit, triggerMiss, triggerRelease, keyMappings]);
+  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, audioGainP2Ref, beatMapRef, beatMapP2Ref, difficulty, instrumentMode, gameMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHitP1, triggerHitP2, triggerMissP1, triggerMissP2, triggerReleaseP1, triggerReleaseP2, p1Keys, p2Keys]);
 
   return { startGameRequestRef };
 }

@@ -7,7 +7,9 @@ export function useAudioEngine() {
   const audioBufferRef = useRef<AudioBuffer | { vocals: AudioBuffer, other: AudioBuffer, drums: AudioBuffer, bass: AudioBuffer } | null>(null);
   const audioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const audioGainNodeRef = useRef<GainNode | null>(null);
+  const audioGainP2Ref = useRef<GainNode | null>(null);
   const beatMapRef = useRef<any[]>([]);
+  const beatMapP2Ref = useRef<any[]>([]);
   const [bpm, setBpm] = useState<number>(0);
   const [isLoadingSong, setIsLoadingSong] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -42,7 +44,7 @@ export function useAudioEngine() {
     return allChunks.buffer;
   };
 
-  const analyzeAndGenerateBeatMap = async (buffer: AudioBuffer, currentDiff: string) => {
+  const analyzeAndGenerateBeatMap = async (buffer: AudioBuffer, currentDiff: string, targetRef: any = beatMapRef, isDrums: boolean = false) => {
     const offlineCtx = new OfflineAudioContext(3, buffer.length, buffer.sampleRate);
     const source = offlineCtx.createBufferSource();
     source.buffer = buffer;
@@ -51,13 +53,13 @@ export function useAudioEngine() {
 
     const lp = offlineCtx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 150;
+    lp.frequency.value = isDrums ? 120 : 150; // Focused slightly more for drums
     source.connect(lp);
     lp.connect(merger, 0, 0);
 
     const bp = offlineCtx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = 1300;
+    bp.frequency.value = isDrums ? 800 : 1300;
     bp.Q.value = 0.5;
     source.connect(bp);
     bp.connect(merger, 0, 1);
@@ -97,7 +99,7 @@ export function useAudioEngine() {
         lowEnergy += Math.abs(lowData[i]);
         midEnergy += Math.abs(midData[i]);
     }
-    const isRock = midEnergy > (lowEnergy * 0.65);
+    const isRock = isDrums ? false : midEnergy > (lowEnergy * 0.65); // For drums, we always favor low energy for kick/snare
 
     const beatMap: any[] = [];
     const sampleRate = buffer.sampleRate;
@@ -105,9 +107,9 @@ export function useAudioEngine() {
     const windowSeconds = 1.5; 
     const windowSamples = Math.floor(windowSeconds * sampleRate / sampleWindow);
     
-    let sensitivity = 1.35;
-    let cooldownSecs = 0.22;
-    let holdProb = 0.1;
+    let sensitivity = isDrums ? 1.25 : 1.35; // Slightly more sensitive for drums
+    let cooldownSecs = isDrums ? 0.18 : 0.22;
+    let holdProb = isDrums ? 0.05 : 0.1; // Less holds for drums
     
     if (currentDiff === 'easy') { sensitivity = 1.8; cooldownSecs = 0.45; holdProb = 0.05; }
     else if (currentDiff === 'hard') { sensitivity = 1.25; cooldownSecs = 0.16; holdProb = 0.25; }
@@ -171,7 +173,7 @@ export function useAudioEngine() {
             }
         }
     }
-    beatMapRef.current = beatMap;
+    targetRef.current = beatMap;
     
     let intervals: number[] = [];
     for (let j = 1; j < beatMap.length; j++) {
@@ -196,12 +198,13 @@ export function useAudioEngine() {
     setBpm(calculatedBpm);
   };
 
-  const loadSong = async (song: Song, difficulty: string, instrumentMode: 'other' | 'drums' | 'bass') => {
+  const loadSong = async (song: Song, difficulty: string, instrumentMode: 'other' | 'drums' | 'bass', gameMode: 'single' | 'multiplayer' = 'single') => {
     setIsLoadingSong(true);
     setLoadingProgress(0);
     try {
       if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
-      let analyzeBuffer: AudioBuffer;
+      let analyzeBufferP1: AudioBuffer;
+      let analyzeBufferP2: AudioBuffer | null = null;
 
       if (song.stems) {
         const stemUrls = [song.stems.vocals, song.stems.other, song.stems.drums, song.stems.bass];
@@ -220,7 +223,13 @@ export function useAudioEngine() {
         if (stemBuffers.some(b => b === null)) throw new Error("Failed to download stems");
         const [vocBuf, otherBuf, drumBuf, bassBuf] = await Promise.all(stemBuffers.map(buf => audioCtxRef.current!.decodeAudioData(buf!)));
         audioBufferRef.current = { vocals: vocBuf, other: otherBuf, drums: drumBuf, bass: bassBuf };
-        analyzeBuffer = instrumentMode === 'drums' ? drumBuf : instrumentMode === 'bass' ? bassBuf : otherBuf;
+        
+        if (gameMode === 'multiplayer') {
+          analyzeBufferP1 = otherBuf; // P1 is Guitar
+          analyzeBufferP2 = drumBuf;  // P2 is Drums
+        } else {
+          analyzeBufferP1 = instrumentMode === 'drums' ? drumBuf : instrumentMode === 'bass' ? bassBuf : otherBuf;
+        }
       } else {
         let arrayBuffer: ArrayBuffer;
         if (song.type === 'remote') {
@@ -233,10 +242,19 @@ export function useAudioEngine() {
         }
         const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
         audioBufferRef.current = decodedBuffer;
-        analyzeBuffer = decodedBuffer;
+        analyzeBufferP1 = decodedBuffer;
+        if (gameMode === 'multiplayer') analyzeBufferP2 = decodedBuffer;
       }
       setIsAnalyzing(true);
-      await analyzeAndGenerateBeatMap(analyzeBuffer, difficulty);
+      
+      const isP1Drums = gameMode !== 'multiplayer' && instrumentMode === 'drums';
+      await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, isP1Drums);
+      
+      if (analyzeBufferP2) {
+        await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, true); // P2 is always Drums in multiplayer
+      } else {
+        beatMapP2Ref.current = [];
+      }
       setIsAnalyzing(false);
       return true;
     } catch (err) {
@@ -258,7 +276,9 @@ export function useAudioEngine() {
     audioBufferRef,
     audioSourcesRef,
     audioGainNodeRef,
+    audioGainP2Ref,
     beatMapRef,
+    beatMapP2Ref,
     bpm,
     isLoadingSong,
     loadingProgress,

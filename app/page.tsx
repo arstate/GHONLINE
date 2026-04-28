@@ -19,34 +19,43 @@ export default function RhythmGame() {
   const [score, setScore] = useState(0);
   const [difficulty, setDifficulty] = useState('normal');
   const [instrumentMode, setInstrumentMode] = useState<'other' | 'drums' | 'bass'>('drums');
+  const [gameMode, setGameMode] = useState<'single' | 'multiplayer'>('single');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const countdownRef = useRef<number | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const [keyMappings, setKeyMappings] = useState<string[]>(() => {
+  const [p1Keys, setP1Keys] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('rhytmika_keys');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          console.error("Failed to load keys", e);
-        }
-      }
+      const saved = localStorage.getItem('rhytmika_p1_keys');
+      if (saved) try { return JSON.parse(saved); } catch (e) {}
     }
     return ['a', 's', 'j', 'k', 'l'];
   });
+
+  const [p2Keys, setP2Keys] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('rhytmika_p2_keys');
+      if (saved) try { return JSON.parse(saved); } catch (e) {}
+    }
+    return ['h', 'j', 'k', 'l', ';'];
+  });
+
+  const [mappingPlayer, setMappingPlayer] = useState<1 | 2>(1);
   const [showSettings, setShowSettings] = useState(false);
   const [mappingLane, setMappingLane] = useState<number | null>(null);
 
-  const saveKeys = (keys: string[]) => {
-    setKeyMappings(keys);
-    localStorage.setItem('rhytmika_keys', JSON.stringify(keys));
+  const saveKeys = (player: 1 | 2, keys: string[]) => {
+    if (player === 1) {
+      setP1Keys(keys);
+      localStorage.setItem('rhytmika_p1_keys', JSON.stringify(keys));
+    } else {
+      setP2Keys(keys);
+      localStorage.setItem('rhytmika_p2_keys', JSON.stringify(keys));
+    }
   };
 
   useEffect(() => {
     if (mappingLane === null) return;
-
     let rafId: number;
     const pollGamepad = () => {
       const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -54,26 +63,28 @@ export default function RhythmGame() {
         if (!gp) continue;
         gp.buttons.forEach((btn, idx) => {
           if (btn.pressed) {
-            const newKeys = [...keyMappings];
+            const currentKeys = mappingPlayer === 1 ? p1Keys : p2Keys;
+            const newKeys = [...currentKeys];
             newKeys[mappingLane] = `gp:${idx}`;
-            saveKeys(newKeys);
+            saveKeys(mappingPlayer, newKeys);
             setMappingLane(null);
           }
         });
       }
       if (mappingLane !== null) rafId = requestAnimationFrame(pollGamepad);
     };
-
     rafId = requestAnimationFrame(pollGamepad);
     return () => cancelAnimationFrame(rafId);
-  }, [mappingLane, keyMappings]);
+  }, [mappingLane, p1Keys, p2Keys, mappingPlayer]);
 
   const {
     audioCtxRef,
     audioBufferRef,
     audioSourcesRef,
     audioGainNodeRef,
+    audioGainP2Ref,
     beatMapRef,
+    beatMapP2Ref,
     bpm,
     isLoadingSong,
     loadingProgress,
@@ -97,13 +108,17 @@ export default function RhythmGame() {
     audioBufferRef,
     audioSourcesRef,
     audioGainNodeRef,
+    audioGainP2Ref,
     beatMapRef,
+    beatMapP2Ref,
     difficulty,
     instrumentMode,
+    gameMode,
     setGameState,
     setScore,
     onGameEnd: handleGameEnd,
-    keyMappings
+    p1Keys,
+    p2Keys
   });
 
   useEffect(() => {
@@ -147,7 +162,7 @@ export default function RhythmGame() {
 
   const handlePlaySong = async () => {
     if (!selectedSong) return;
-    const success = await loadSong(selectedSong, difficulty, instrumentMode);
+    const success = await loadSong(selectedSong, difficulty, instrumentMode, gameMode);
     if (success) {
       setSelectedSong(null);
       startGame();
@@ -241,10 +256,25 @@ export default function RhythmGame() {
               </div>
               
               <div className="p-8 space-y-8">
+                <div className="flex gap-2 p-1 bg-black/50 rounded-2xl border border-zinc-800">
+                  <button 
+                    onClick={() => setMappingPlayer(1)}
+                    className={cn("flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all", mappingPlayer === 1 ? "bg-emerald-500 text-black" : "text-zinc-500 hover:text-white")}
+                  >
+                    PLAYER 1
+                  </button>
+                  <button 
+                    onClick={() => setMappingPlayer(2)}
+                    className={cn("flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all", mappingPlayer === 2 ? "bg-emerald-500 text-black" : "text-zinc-500 hover:text-white")}
+                  >
+                    PLAYER 2
+                  </button>
+                </div>
+
                 <div>
                   <h3 className="text-emerald-500 font-bold uppercase text-sm tracking-widest mb-6">Input Mapping</h3>
                   <div className="grid grid-cols-5 gap-3">
-                    {keyMappings.map((key, i) => (
+                    {(mappingPlayer === 1 ? p1Keys : p2Keys).map((key, i) => (
                       <div key={i} className="flex flex-col items-center gap-3">
                         <div className={`w-12 h-3 rounded-full ${['bg-emerald-500', 'bg-rose-500', 'bg-amber-500', 'bg-blue-500', 'bg-orange-500'][i]} shadow-[0_0_15px_rgba(0,0,0,0.5)]`} />
                         <button 
@@ -263,7 +293,7 @@ export default function RhythmGame() {
                   </div>
                   <div className="mt-8 p-6 bg-black/50 rounded-3xl border border-zinc-800/50">
                     <p className="text-zinc-400 text-xs leading-relaxed text-center italic">
-                      Click a button above then press any key or controller button to remap.
+                      Configuring {mappingPlayer === 1 ? 'Player 1' : 'Player 2'}. Click a button above then press any key or controller button to remap.
                     </p>
                   </div>
                 </div>
@@ -272,8 +302,8 @@ export default function RhythmGame() {
               <div className="p-8 bg-zinc-900/50 border-t border-zinc-800 flex gap-4">
                 <button 
                   onClick={() => {
-                    const defaults = ['a', 's', 'j', 'k', 'l'];
-                    saveKeys(defaults);
+                    const defaults = mappingPlayer === 1 ? ['a', 's', 'j', 'k', 'l'] : ['h', 'j', 'k', 'l', ';'];
+                    saveKeys(mappingPlayer, defaults);
                   }}
                   className="flex-1 py-5 px-6 rounded-2xl bg-zinc-800 text-zinc-400 font-black tracking-widest hover:bg-zinc-700 hover:text-white transition-all active:scale-95"
                 >
@@ -296,9 +326,10 @@ export default function RhythmGame() {
           tabIndex={0} 
           autoFocus 
           onKeyDown={(e) => {
-            const newKeys = [...keyMappings];
+            const currentKeys = mappingPlayer === 1 ? p1Keys : p2Keys;
+            const newKeys = [...currentKeys];
             newKeys[mappingLane] = e.key.toLowerCase();
-            saveKeys(newKeys);
+            saveKeys(mappingPlayer, newKeys);
             setMappingLane(null);
           }}
         />
@@ -306,14 +337,31 @@ export default function RhythmGame() {
         <div className="relative w-full h-full shadow-2xl bg-black flex flex-col overflow-hidden">
           <div ref={mainContainerRef} className="relative w-full h-full overflow-hidden bg-[#000000]">
             <div ref={trackContainerRef} className="absolute overflow-hidden" style={{ width: 1280, height: 720, transformOrigin: 'center center' }}>
-              <div className="absolute inset-0 pointer-events-none" style={{ perspective: 400, perspectiveOrigin: '640px 180px', transformStyle: 'preserve-3d' }}>
-                <div className="absolute top-[0px] left-0 w-full h-[350px] z-10 bg-gradient-to-b from-black via-black/80 to-transparent" />
-                <div style={{ position: 'absolute', left: 290, width: 700, top: 620, height: 5000, transformOrigin: 'center 0', transform: 'rotateX(90deg)', transformStyle: 'preserve-3d' }}>
-                  <div id="trackSurface" style={{ position: 'absolute', left: 0, width: '100%', top: -2000, height: 10000, backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')", backgroundSize: "700px 640px", opacity: 0.8, willChange: 'transform' }} />
+              <div className="absolute inset-0 pointer-events-none flex" style={{ transformStyle: 'preserve-3d' }}>
+                <div className="absolute top-[0px] left-0 w-full h-[350px] z-[15] bg-gradient-to-b from-black via-black/80 to-transparent" />
+                
+                {/* Track P1 Container */}
+                <div className={cn("relative h-full overflow-hidden shrink-0", gameMode === 'multiplayer' ? "w-1/2" : "w-full")} style={{ perspective: 400, perspectiveOrigin: '50% 180px', transformStyle: 'preserve-3d' }}>
+                  <div className="w-full h-full" style={{ clipPath: 'polygon(38% 30%, 62% 30%, 105% 100%, -5% 100%)', transformStyle: 'preserve-3d' }}>
+                    <div style={{ position: 'absolute', left: '50%', width: 700, top: 620, height: 5000, marginLeft: -350, transformOrigin: 'center 0', transform: 'rotateX(90deg)', transformStyle: 'preserve-3d' }}>
+                      <div id="trackSurfaceP1" style={{ position: 'absolute', left: 0, width: '100%', top: -2000, height: 10000, backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')", backgroundSize: "700px 640px", opacity: 0.8, willChange: 'transform' }} />
+                    </div>
+                  </div>
                 </div>
+
+                {/* Track P2 Container */}
+                {gameMode === 'multiplayer' && (
+                  <div className="relative h-full w-1/2 overflow-hidden shrink-0" style={{ perspective: 400, perspectiveOrigin: '50% 180px', transformStyle: 'preserve-3d' }}>
+                    <div className="w-full h-full" style={{ clipPath: 'polygon(38% 30%, 62% 30%, 105% 100%, -5% 100%)', transformStyle: 'preserve-3d' }}>
+                      <div style={{ position: 'absolute', left: '50%', width: 700, top: 620, height: 5000, marginLeft: -350, transformOrigin: 'center 0', transform: 'rotateX(90deg)', transformStyle: 'preserve-3d' }}>
+                        <div id="trackSurfaceP2" style={{ position: 'absolute', left: 0, width: '100%', top: -2000, height: 10000, backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')", backgroundSize: "700px 640px", opacity: 0.8, willChange: 'transform' }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <canvas ref={canvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full touch-none z-10 bg-transparent" />
+              <canvas ref={canvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full touch-none z-20 bg-transparent" />
               
               <GameOverlay score={score} bpm={bpm} gameState={gameState} onPause={() => setGameState('paused')} />
             </div>
@@ -332,8 +380,10 @@ export default function RhythmGame() {
             selectedSong={selectedSong}
             difficulty={difficulty}
             instrumentMode={instrumentMode}
+            gameMode={gameMode}
             setDifficulty={setDifficulty}
             setInstrumentMode={setInstrumentMode}
+            setGameMode={setGameMode}
             isLoadingSong={isLoadingSong}
             loadingProgress={loadingProgress}
             isAnalyzing={isAnalyzing}

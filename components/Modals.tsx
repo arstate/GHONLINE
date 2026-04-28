@@ -7,8 +7,10 @@ interface ModalsProps {
   selectedSong: Song | null;
   difficulty: string;
   instrumentMode: 'other' | 'drums' | 'bass';
+  gameMode: 'single' | 'multiplayer';
   setDifficulty: (diff: string) => void;
   setInstrumentMode: (inst: 'other' | 'drums' | 'bass') => void;
+  setGameMode: (mode: 'single' | 'multiplayer') => void;
   isLoadingSong: boolean;
   loadingProgress: number;
   isAnalyzing: boolean;
@@ -25,8 +27,10 @@ export function Modals({
   selectedSong,
   difficulty,
   instrumentMode,
+  gameMode,
   setDifficulty,
   setInstrumentMode,
+  setGameMode,
   isLoadingSong,
   loadingProgress,
   isAnalyzing,
@@ -46,7 +50,31 @@ export function Modals({
                 <h2 className="text-2xl sm:text-3xl font-black text-white mb-2 leading-tight">
                     {selectedSong.title}
                 </h2>
-                <div className="text-emerald-500/80 font-bold tracking-widest text-xs uppercase mb-8">
+                
+                {selectedSong.stems && (
+                  <div className="mb-6 mt-4">
+                    <div className="text-emerald-500/80 font-bold tracking-widest text-xs uppercase mb-3">
+                        Game Mode
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        {(['single', 'multiplayer'] as const).map(mode => (
+                            <button
+                                key={mode}
+                                onClick={() => setGameMode(mode)}
+                                className={`py-4 rounded-xl font-bold uppercase tracking-wider transition-all border-2 ${
+                                    gameMode === mode 
+                                    ? 'bg-rose-500/10 border-rose-500 text-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.15)]' 
+                                    : 'border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 bg-neutral-950/50'
+                                }`}
+                            >
+                                {mode}
+                            </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-emerald-500/80 font-bold tracking-widest text-xs uppercase mb-4">
                     Select Difficulty
                 </div>
 
@@ -66,7 +94,7 @@ export function Modals({
                     ))}
                 </div>
 
-                {selectedSong.stems && (
+                {selectedSong.stems && gameMode === 'single' && (
                   <div className="mb-8">
                     <div className="text-emerald-500/80 font-bold tracking-widest text-xs uppercase mb-3">
                         Target Instrument
@@ -78,7 +106,7 @@ export function Modals({
                                 onClick={() => setInstrumentMode(inst)}
                                 className={`py-2 rounded-lg font-bold text-xs uppercase tracking-wide transition-all border ${
                                     instrumentMode === inst 
-                                    ? 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.15)]' 
+                                    ? 'bg-blue-500/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)]' 
                                     : 'border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 bg-neutral-950/50'
                                 }`}
                             >
@@ -87,6 +115,14 @@ export function Modals({
                         ))}
                     </div>
                   </div>
+                )}
+                
+                {selectedSong.stems && gameMode === 'multiplayer' && (
+                   <div className="mb-8 p-4 bg-black/40 rounded-xl border border-rose-500/20 text-center">
+                     <p className="text-neutral-400 text-xs font-bold uppercase tracking-tighter">
+                       P1: Guitar/Keys <span className="text-rose-500 mx-2">VS</span> P2: Drums
+                     </p>
+                   </div>
                 )}
 
                 <div className="flex gap-3">
