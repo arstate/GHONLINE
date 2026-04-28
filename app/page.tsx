@@ -118,6 +118,7 @@ const getSongBuffer = async (dbId: number): Promise<ArrayBuffer> => {
 
 export default function RhythmGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const trackContainerRef = useRef<HTMLDivElement>(null);
   const [score, setScore] = useState(0); // keep for lobby if needed
   const currentScoreRef = useRef(0);
   const [isReady, setIsReady] = useState(false);
@@ -572,6 +573,23 @@ export default function RhythmGame() {
     }, 1000);
   };
 
+
+  useEffect(() => {
+    const parent = canvasRef.current?.parentElement;
+    if (!parent) return;
+
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        if (trackContainerRef.current) {
+          const w = entry.contentRect.width;
+          trackContainerRef.current.style.transform = `scale(${w / 500})`;
+        }
+      }
+    });
+
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1268,10 +1286,11 @@ export default function RhythmGame() {
         <div className="relative w-full h-full shadow-2xl rounded-xl p-1 bg-gradient-to-b from-white/10 to-[#0c0c0c] flex flex-col overflow-hidden">
           
           {/* Game Canvas Container */}
-          <div className="relative w-full h-full overflow-hidden rounded-lg bg-[#000000]" style={{ containerType: 'size' }}>
+          <div className="relative w-full h-full overflow-hidden rounded-lg bg-[#000000]">
             
             {/* 3D Track Container matching the 500x800 internal coordinates exactly */}
             <div 
+              ref={trackContainerRef}
               style={{
                 position: "absolute",
                 top: 0,
@@ -1279,7 +1298,6 @@ export default function RhythmGame() {
                 width: "500px",
                 height: "800px",
                 transformOrigin: "top left",
-                transform: "scale(calc(100cqw / 500))",
                 perspective: "300px",
                 perspectiveOrigin: "250px 150px",
                 zIndex: 0

@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 29: Visual Polish - Glowing Track Borders. Added thick, subtly glowing white lines along the extreme left and right boundaries of the 3D track. This enhances visual depth and clearly demarcates the playable area corresponding to the outer rhythm keys.",
+  "description": "Step 30: Bug Fixes and Polish. Added glowing thick white border lines along the left and right outer boundaries of the 3D track. Fixed a critical layout bug on mobile where the textured track became misaligned or unscaled by replacing the CSS container query (`100cqw`) with a robust ResizeObserver-based scaling approach.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
