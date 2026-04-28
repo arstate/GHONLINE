@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 30: Bug Fixes and Polish. Added glowing thick white border lines along the left and right outer boundaries of the 3D track. Fixed a critical layout bug on mobile where the textured track became misaligned or unscaled by replacing the CSS container query (`100cqw`) with a robust ResizeObserver-based scaling approach.",
+  "description": "Step 31: Track Performance Optimization and Input Fixes. Swapped out the expensive moving `background-position` CSS property for a hardware-accelerated `translateY` transform on a smaller clipping wrapper to drastically improve scrolling frame rates on PC and mobile. Also added `pointer-events: none` to the CSS track element and `onContextMenu` prevention on the canvas so right-clicking or holding keys doesn't trigger the browser menu.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

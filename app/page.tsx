@@ -704,7 +704,7 @@ export default function RhythmGame() {
       trackScrollY += currentSpeedZ * deltaTime; 
       const trackSurface = document.getElementById('trackSurface');
       if (trackSurface) {
-          trackSurface.style.backgroundPositionY = `${trackScrollY}px`;
+          trackSurface.style.transform = `translateY(${trackScrollY % 500}px)`;
       }
 
       for (let i = notes.length - 1; i >= 0; i--) {
@@ -1300,32 +1300,47 @@ export default function RhythmGame() {
                 transformOrigin: "top left",
                 perspective: "300px",
                 perspectiveOrigin: "250px 150px",
-                zIndex: 0
+                zIndex: 0,
+                pointerEvents: "none"
               }}
             >
               {/* The floor plane mapped to Game's Z coordinate */}
               <div 
-                 id="trackSurface" 
                  style={{
                    position: 'absolute',
                    left: '0px',
                    width: '500px',
                    bottom: '0px', 
-                   height: '20100px', 
-                   transformOrigin: 'center 20000px', 
+                   height: '3100px', 
+                   transformOrigin: 'center 3000px', 
                    transform: 'rotateX(90deg)', 
-                   backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')",
-                   backgroundRepeat: "repeat",
-                   backgroundSize: "500px 500px",
-                   opacity: 0.9
+                   overflow: 'hidden',
+                   opacity: 0.9,
+                   pointerEvents: 'none'
                  }}
-              />
+              >
+                <div 
+                   id="trackSurface" 
+                   style={{
+                     position: 'absolute',
+                     left: '0px',
+                     bottom: '0px',
+                     width: '500px',
+                     height: '3600px', 
+                     backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')",
+                     backgroundRepeat: "repeat",
+                     backgroundSize: "500px 500px",
+                     willChange: 'transform'
+                   }}
+                />
+              </div>
             </div>
 
             <canvas
               ref={canvasRef}
               width={500}
               height={800}
+              onContextMenu={(e) => e.preventDefault()}
               className="absolute inset-0 w-full h-full block touch-none z-10 bg-transparent"
             />
           </div>
