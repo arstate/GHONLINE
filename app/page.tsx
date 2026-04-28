@@ -613,6 +613,27 @@ export default function RhythmGame() {
     if (octx) {
       octx.clearRect(0, 0, width, height);
 
+      // Draw outer glowing edge lines
+      octx.save();
+      octx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+      octx.shadowBlur = 10;
+      octx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      octx.lineWidth = 3;
+      
+      // Left edge
+      octx.beginPath();
+      octx.moveTo(getScreenX(-250, START_Z), getScreenY(START_Z));
+      octx.lineTo(getScreenX(-250, -200), getScreenY(-200));
+      octx.stroke();
+
+      // Right edge
+      octx.beginPath();
+      octx.moveTo(getScreenX(250, START_Z), getScreenY(START_Z));
+      octx.lineTo(getScreenX(250, -200), getScreenY(-200));
+      octx.stroke();
+      
+      octx.restore();
+
       octx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
       octx.lineWidth = 1;
       for (let i = 1; i <= 4; i++) {

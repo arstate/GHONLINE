@@ -1,6 +1,6 @@
 {
   "name": "Web Rhythm Game UI",
-  "description": "Step 28: Perfected 3D Track Perspective Projection. Re-engineered the CSS 3D structure to mathematically replicate the pseudo-3D game engine's projection using local 500x800 coordinate systems scaled dynamically with cqw. Aligned the vanishing point perfectly with canvas coordinates and fixed the texture scroll scale coefficient.",
+  "description": "Step 29: Visual Polish - Glowing Track Borders. Added thick, subtly glowing white lines along the extreme left and right boundaries of the 3D track. This enhances visual depth and clearly demarcates the playable area corresponding to the outer rhythm keys.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
