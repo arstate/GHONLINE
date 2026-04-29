@@ -158,10 +158,42 @@ export function useAudioEngine() {
       }
       setIsAnalyzing(true);
       
-      await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, gameMode === 'multiplayer' ? 'other' : instrumentMode, globalBpmHint, globalOffsetHint);
+      const parseCustomBeatmap = (str: string) => {
+        const beats: any[] = [];
+        const parts = str.split(',');
+        parts.forEach((p) => {
+          if (!p) return;
+          const [laneStr, timeStr] = p.split(':');
+          beats.push({ time: parseFloat(timeStr), notes: [{ lane: parseInt(laneStr, 10), duration: 0, type: 'tap' }] });
+        });
+        return beats.sort((a, b) => a.time - b.time);
+      };
+
+      const instrumentP1 = gameMode === 'multiplayer' ? 'other' : instrumentMode;
+      const lookupDiff = difficulty === 'expert' ? 'extreme' : difficulty;
+      if (song.customBeatmap?.tracks?.[instrumentP1] && (lookupDiff === 'hard' || lookupDiff === 'extreme')) {
+        const beatmapStr = (song.customBeatmap.tracks[instrumentP1] as any)[lookupDiff];
+        if (beatmapStr) {
+          beatMapRef.current = parseCustomBeatmap(beatmapStr);
+          setBpm(song.customBeatmap.bpm);
+        } else {
+          await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, instrumentP1, globalBpmHint, globalOffsetHint);
+        }
+      } else {
+        await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, instrumentP1, globalBpmHint, globalOffsetHint);
+      }
       
       if (analyzeBufferP2) {
-        await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums', globalBpmHint, globalOffsetHint); // P2 is always Drums in multiplayer
+        if (song.customBeatmap?.tracks?.['drums'] && (lookupDiff === 'hard' || lookupDiff === 'extreme')) {
+          const beatmapStr = (song.customBeatmap.tracks['drums'] as any)[lookupDiff];
+          if (beatmapStr) {
+            beatMapP2Ref.current = parseCustomBeatmap(beatmapStr);
+          } else {
+            await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums', globalBpmHint, globalOffsetHint);
+          }
+        } else {
+          await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums', globalBpmHint, globalOffsetHint);
+        }
       } else {
         beatMapP2Ref.current = [];
       }

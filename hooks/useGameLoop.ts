@@ -34,8 +34,8 @@ export function useGameLoop({
   audioCtxRef,
   audioBufferRef,
   audioSourcesRef,
-  audioGainNodeRef, // Now used as P1 or Single gain
-  audioGainP2Ref,   // New: specifically for P2 (drums) in multiplayer
+  audioGainNodeRef,
+  audioGainP2Ref,
   beatMapRef,
   beatMapP2Ref,
   difficulty,
@@ -48,7 +48,8 @@ export function useGameLoop({
   p2Keys,
   audioOffset,
   hitButtonImgs,
-  hitButtonPressedImgs
+  hitButtonPressedImgs,
+  activeSong
 }: any) {
   const notesP1Ref = useRef<Note[]>([]);
   const notesP2Ref = useRef<Note[]>([]);
@@ -71,9 +72,15 @@ export function useGameLoop({
   const BASE_Y_OFFSET = 500;
   
   const getSpeedZ = useCallback(() => {
+    if (activeSong?.customBeatmap?.speeds) {
+       const lookupDiff = difficulty === 'expert' ? 'extreme' : difficulty;
+       if (activeSong.customBeatmap.speeds[lookupDiff]) {
+         return activeSong.customBeatmap.speeds[lookupDiff];
+       }
+    }
     const speedMap: Record<string, number> = { easy: 400, normal: 600, hard: 1000, expert: 1000 };
     return speedMap[difficulty] || 600;
-  }, [difficulty]);
+  }, [difficulty, activeSong]);
 
   const syncScoreUI = useCallback(() => {
     const s1 = document.getElementById('scoreDisplay');

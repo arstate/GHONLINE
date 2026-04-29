@@ -237,7 +237,8 @@ export default function RhythmGame() {
     p2Keys,
     audioOffset,
     hitButtonImgs,
-    hitButtonPressedImgs
+    hitButtonPressedImgs,
+    activeSong: selectedSong
   });
 
   useEffect(() => {
