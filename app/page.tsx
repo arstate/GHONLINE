@@ -21,6 +21,57 @@ export default function RhythmGame() {
   const [instrumentMode, setInstrumentMode] = useState<'other' | 'drums' | 'bass'>('drums');
   const [gameMode, setGameMode] = useState<'single' | 'multiplayer'>('single');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+  const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
+  const [videoDownloadProgress, setVideoDownloadProgress] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const VIDEO_SOURCE_URL = "https://ia902800.us.archive.org/32/items/8-k-60-fps-paranoid-black-sabbath-pandora-720p-h-264/%5B8K%2060FPS%5D%20Paranoid%20-%20Black%20Sabbath%20-%20Pandora%20%28720p%2C%20h264%29.mp4";
+
+  // Pre-download video for caching
+  useEffect(() => {
+    const downloadVideo = async () => {
+      try {
+        const response = await fetch(VIDEO_SOURCE_URL);
+        if (!response.body) return;
+        
+        const reader = response.body.getReader();
+        const contentLength = +(response.headers.get('Content-Length') || 0);
+        let receivedLength = 0;
+        const chunks = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          receivedLength += value.length;
+          if (contentLength) {
+            setVideoDownloadProgress(Math.round((receivedLength / contentLength) * 100));
+          }
+        }
+
+        const blob = new Blob(chunks);
+        const url = URL.createObjectURL(blob);
+        setVideoBlobUrl(url);
+      } catch (e) {
+        console.error("Failed to pre-download video:", e);
+      }
+    };
+    downloadVideo();
+  }, []);
+
+  // Sync video with game state
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (gameState === 'game' || gameState === 'countdown' || gameState === 'resuming') {
+      if (video.currentTime < 5) video.currentTime = 5;
+      video.play().catch(e => console.warn("Video play interrupted:", e));
+    } else if (gameState === 'paused' || gameState === 'postgame') {
+      video.pause();
+    } else if (gameState === 'lobby') {
+      video.currentTime = 5;
+    }
+  }, [gameState]);
   const countdownRef = useRef<number | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [audioOffset, setAudioOffset] = useState<number>(() => {
@@ -374,6 +425,26 @@ export default function RhythmGame() {
       )}
         <div className="relative w-full h-full shadow-2xl bg-black flex flex-col overflow-hidden">
           <div ref={mainContainerRef} className="relative w-full h-full overflow-hidden bg-[#000000]">
+            {/* BACKGROUND VIDEO */}
+            {videoBlobUrl && (
+              <video 
+                ref={videoRef}
+                muted 
+                playsInline 
+                className={cn(
+                  "absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 z-[-1]",
+                  (gameState === 'game' || gameState === 'paused' || gameState === 'resuming' || gameState === 'countdown') ? "opacity-40" : "opacity-0"
+                )}
+                onEnded={() => {
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = 5;
+                    videoRef.current.play();
+                  }
+                }}
+              >
+                <source src={videoBlobUrl} type="video/mp4" />
+              </video>
+            )}
             <div ref={trackContainerRef} className="absolute overflow-hidden" style={{ width: 1280, height: 720, transformOrigin: 'center center' }}>
               {/* TEXTURE LAYER - ROTASI 90 DERAJAT SEMPURNA */}
               <div className="absolute inset-0 z-0 pointer-events-none">
@@ -461,6 +532,8 @@ export default function RhythmGame() {
             setGameMode={setGameMode}
             isLoadingSong={isLoadingSong}
             loadingProgress={loadingProgress}
+            videoDownloadProgress={videoDownloadProgress}
+            videoBlobUrl={videoBlobUrl}
             isAnalyzing={isAnalyzing}
             score={score}
             audioOffset={audioOffset}

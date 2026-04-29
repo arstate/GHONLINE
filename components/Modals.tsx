@@ -13,6 +13,8 @@ interface ModalsProps {
   setGameMode: (mode: 'single' | 'multiplayer') => void;
   isLoadingSong: boolean;
   loadingProgress: number;
+  videoDownloadProgress: number;
+  videoBlobUrl: string | null;
   isAnalyzing: boolean;
   score: number;
   audioOffset: number;
@@ -36,6 +38,8 @@ export function Modals({
   setGameMode,
   isLoadingSong,
   loadingProgress,
+  videoDownloadProgress,
+  videoBlobUrl,
   isAnalyzing,
   score,
   audioOffset,
@@ -196,19 +200,21 @@ export function Modals({
       )}
 
       {/* Loading Overlay */}
-      {(isLoadingSong || isAnalyzing) && (
+      {(isLoadingSong || isAnalyzing || (videoDownloadProgress > 0 && videoDownloadProgress < 100)) && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] backdrop-blur-sm transition-all animate-in fade-in duration-300">
           <div className="text-center px-6">
             <div className="relative w-24 h-24 mx-auto mb-8 flex items-center justify-center">
                 <div className="absolute inset-0 border-4 border-emerald-500/20 rounded-full"></div>
                 <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                <div className="text-emerald-500 font-black text-xl z-10">{isLoadingSong && !isAnalyzing ? `${loadingProgress}%` : ""}</div>
+                <div className="text-emerald-500 font-black text-xl z-10">
+                  {videoDownloadProgress < 100 ? `${videoDownloadProgress}%` : (isLoadingSong && !isAnalyzing ? `${loadingProgress}%` : "")}
+                </div>
             </div>
-            <h3 className="text-emerald-500 font-black text-2xl tracking-[0.2em] uppercase mb-3 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
-              {isAnalyzing ? "Analyzing Spectrum" : "Loading Track"}
+            <h3 className="text-emerald-500 font-black text-2xl tracking-[0.2em] uppercase mb-3 drop-shadow-[0_0_100px_rgba(16,185,129,0.3)]">
+              {videoDownloadProgress < 100 ? "Buffering Background Video" : (isAnalyzing ? "Analyzing Spectrum" : "Loading Track")}
             </h3>
             <p className="text-white/60 font-bold text-xs tracking-widest uppercase animate-pulse">
-              {isAnalyzing ? "Mapping Genre-Adaptive Peaks..." : "Buffering Audio Stream..."}
+              {videoDownloadProgress < 100 ? "Caching High-Bitrate Visuals..." : (isAnalyzing ? "Mapping Genre-Adaptive Peaks..." : "Buffering Audio Stream...")}
             </p>
           </div>
         </div>
