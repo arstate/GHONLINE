@@ -62,7 +62,18 @@ export const defaultPlaylist: Song[] = [
       bass: "https://dn711202.ca.archive.org/0/items/dragonforce-through-the-fire-and-flames-official-video-dragon-force-youtube-bass/DRAGONFORCE%20-%20Through%20the%20Fire%20and%20Flames%20%28Official%20Video%29%20-%20DragonForce%20%28youtube%29-bass-C%20minor-200bpm-441hz.mp3"
     } 
   },
-  { id: '8', title: "Tulus - Andai Aku Bisa (Chrisye Cover)", type: 'remote', url: "https://ia601600.us.archive.org/11/items/tulus-andai-aku-bisa-chrisye-cover-lirik-vero-april-youtube/Tulus%20-%20Andai%20Aku%20Bisa%20%28Chrisye%20Cover%29%20%20Lirik%20-%20Vero%20April%20%28youtube%29.mp3" }
+  { id: '8', title: "Tulus - Andai Aku Bisa (Chrisye Cover)", type: 'remote', url: "https://ia601600.us.archive.org/11/items/tulus-andai-aku-bisa-chrisye-cover-lirik-vero-april-youtube/Tulus%20-%20Andai%20Aku%20Bisa%20%28Chrisye%20Cover%29%20%20Lirik%20-%20Vero%20April%20%28youtube%29.mp3" },
+  {
+    id: '10',
+    title: "Avenged Sevenfold - Cosmic (Multitrack)",
+    type: 'remote',
+    stems: {
+      vocals: "https://ia600102.us.archive.org/15/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-vocals-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-vocals-E%20minor-127bpm-440hz.mp3",
+      other: "https://ia600702.us.archive.org/17/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-other-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-other-E%20minor-127bpm-440hz.mp3",
+      drums: "https://ia600609.us.archive.org/35/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-drums-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-drums-E%20minor-127bpm-440hz.mp3",
+      bass: "https://ia601608.us.archive.org/18/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-bass-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-bass-E%20minor-127bpm-440hz.mp3"
+    }
+  }
 ];
 
 const DB_NAME = 'RhythmGameDB';
