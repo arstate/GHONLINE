@@ -362,17 +362,23 @@ export function useGameLoop({
                 const g = ctx.createGain();
                 
                 // Muting Logic:
-                if (gameMode === 'multiplayer') {
-                  if (stem === 'other') audioGainNodeRef.current = g; // P1 Guitar
-                  if (stem === 'drums') audioGainP2Ref.current = g;    // P2 Drums
-                } else {
-                  // Single Player: Mute the specific track being played
-                  if (instrumentMode === stem) {
+                if (stem === 'vocals' || stem === 'bass') {
+                  // Selalu terdengar
+                  src.connect(masterGain);
+                } else if (stem === 'other') { // Gitar
+                  if (gameMode === 'multiplayer' || instrumentMode === 'other') {
                     audioGainNodeRef.current = g;
                   }
+                  src.connect(g).connect(masterGain);
+                } else if (stem === 'drums') {
+                  if (gameMode === 'multiplayer') {
+                    audioGainP2Ref.current = g;
+                  } else if (instrumentMode === 'drums') {
+                    audioGainNodeRef.current = g;
+                  }
+                  src.connect(g).connect(masterGain);
                 }
                 
-                src.connect(g).connect(masterGain);
                 audioSourcesRef.current.push(src);
                 src.start(startT);
              });

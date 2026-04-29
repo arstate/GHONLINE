@@ -17,7 +17,8 @@ export async function analyzeBeatMap(
   buffer: AudioBuffer,
   instrument: InstrumentType,
   difficulty: string,
-  bpmHint?: number
+  bpmHint?: number,
+  offsetHint?: number
 ): Promise<DetectedNote[]> {
   const sampleRate = buffer.sampleRate;
   const channelData = buffer.getChannelData(0); // Use mono for analysis
@@ -123,10 +124,12 @@ export async function analyzeBeatMap(
     const x = Math.sin(s) * 10000;
     return x - Math.floor(x);
   };
+  
+  const offset = offsetHint || 0;
 
   for (const peak of peaks) {
     const sixteenth = beatInterval / 4;
-    const quantizedTime = Math.round(peak.time / sixteenth) * sixteenth;
+    const quantizedTime = Math.round((peak.time - offset) / sixteenth) * sixteenth + offset;
 
     if (quantizedTime <= lastNoteTime + minGap) continue;
 
@@ -252,4 +255,53 @@ function estimateBPM(peaks: { time: number }[]): number {
   while (bpm > 180) bpm /= 2;
   
   return Math.round(bpm / 5) * 5; // Snap to nearest 5 BPM
+}
+
+export async function analyzeMetronome(buffer: AudioBuffer): Promise<{ bpm: number, firstBeatOffset: number }> {
+  const sampleRate = buffer.sampleRate;
+  const offlineCtx = new OfflineAudioContext(1, buffer.length, sampleRate);
+  const source = offlineCtx.createBufferSource();
+  source.buffer = buffer;
+
+  const filterNode = offlineCtx.createBiquadFilter();
+  filterNode.type = 'lowpass';
+  filterNode.frequency.value = 800; // metronome clicks can be higher pitch
+  
+  source.connect(filterNode);
+  filterNode.connect(offlineCtx.destination);
+  source.start(0);
+  
+  const renderedBuffer = await offlineCtx.startRendering();
+  const analyzedData = renderedBuffer.getChannelData(0);
+
+  const windowSize = 512;
+  const hopSize = 256;
+  const fluxes: number[] = [];
+  const times: number[] = [];
+
+  let prevEnergy = 0;
+  for (let i = 0; i < analyzedData.length - windowSize; i += hopSize) {
+    let energy = 0;
+    for (let j = 0; j < windowSize; j++) {
+      energy += Math.abs(analyzedData[i + j]);
+    }
+    energy /= windowSize;
+    const flux = Math.max(0, energy - prevEnergy);
+    fluxes.push(flux);
+    times.push((i + hopSize / 2) / sampleRate);
+    prevEnergy = energy;
+  }
+
+  const thresholds = calculateDynamicThreshold(fluxes, 'drums');
+  const peaks: { time: number }[] = [];
+
+  for (let i = 1; i < fluxes.length - 1; i++) {
+    if (fluxes[i] > thresholds[i] * 2 && fluxes[i] > fluxes[i - 1] && fluxes[i] > fluxes[i + 1]) {
+      peaks.push({ time: times[i] });
+    }
+  }
+
+  const bpm = estimateBPM(peaks);
+  const offset = peaks.length > 0 ? peaks[0].time % (60 / bpm) : 0;
+  return { bpm, firstBeatOffset: offset };
 }

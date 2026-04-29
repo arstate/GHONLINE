@@ -9,6 +9,7 @@ export type Song = {
     other: string; // guitar etc
     drums: string;
     bass: string;
+    metronome?: string;
   };
   dbId?: number;
 };
@@ -36,7 +37,18 @@ export const defaultPlaylist: Song[] = [
       bass: "https://ia601007.us.archive.org/10/items/karnamereka-tante-kesepian-video-lirik-karnamereka-bass-c-major-220bpm-441hz/KARNAMEREKA%20-%20Tante%20Kesepian%20%28%20video%20lirik%20%29%20-%20KARNAMEREKA-bass-C%20major-220bpm-441hz.mp3"
     }
   },
-  { id: '2', title: "Dewi", type: 'remote', url: "https://ia601502.us.archive.org/20/items/dewi_20260427/Dewi.mp3" },
+  { 
+    id: '2', 
+    title: "Dewi (Multitrack)", 
+    type: 'remote', 
+    stems: {
+      vocals: "https://ia601608.us.archive.org/5/items/dewi-vocals-c-major-198bpm-441hz/Dewi-vocals-C%20major-198bpm-441hz.mp3",
+      other: "https://ia800406.us.archive.org/0/items/dewi-other-c-major-198bpm-441hz/Dewi-other-C%20major-198bpm-441hz.mp3",
+      drums: "https://ia600702.us.archive.org/31/items/dewi-drums-c-major-198bpm-441hz/Dewi-drums-C%20major-198bpm-441hz.mp3",
+      bass: "https://ia601007.us.archive.org/9/items/dewi-bass-c-major-198bpm-441hz/Dewi-bass-C%20major-198bpm-441hz.mp3",
+      metronome: "https://ia800408.us.archive.org/29/items/dewi-metronome-c-major-198bpm-441hz/Dewi-metronome-C%20major-198bpm-441hz.mp3"
+    }
+  },
   { 
     id: '3', 
     title: "Threesixty - Dewi (Pop Punk Cover) (Multitrack)", 
@@ -71,7 +83,8 @@ export const defaultPlaylist: Song[] = [
       vocals: "https://ia600102.us.archive.org/15/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-vocals-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-vocals-E%20minor-127bpm-440hz.mp3",
       other: "https://ia600702.us.archive.org/17/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-other-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-other-E%20minor-127bpm-440hz.mp3",
       drums: "https://ia600609.us.archive.org/35/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-drums-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-drums-E%20minor-127bpm-440hz.mp3",
-      bass: "https://ia601608.us.archive.org/18/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-bass-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-bass-E%20minor-127bpm-440hz.mp3"
+      bass: "https://ia601608.us.archive.org/18/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-bass-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-bass-E%20minor-127bpm-440hz.mp3",
+      metronome: "https://ia600507.us.archive.org/19/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-metronome-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-metronome-E%20minor-127bpm-440hz.mp3"
     }
   }
 ];

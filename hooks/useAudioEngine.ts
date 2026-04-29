@@ -1,7 +1,7 @@
 
 import { useRef, useState } from 'react';
 import { getSongBuffer, Song } from '../lib/utils';
-import { analyzeBeatMap, InstrumentType } from '../lib/beatDetection';
+import { analyzeBeatMap, analyzeMetronome, InstrumentType } from '../lib/beatDetection';
 
 export function useAudioEngine() {
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -49,9 +49,11 @@ export function useAudioEngine() {
     buffer: AudioBuffer, 
     currentDiff: string, 
     targetRef: any = beatMapRef, 
-    instrumentType: InstrumentType = 'other'
+    instrumentType: InstrumentType = 'other',
+    bpmHint?: number,
+    offsetHint?: number
   ) => {
-    const detectedNotes = await analyzeBeatMap(buffer, instrumentType, currentDiff);
+    const detectedNotes = await analyzeBeatMap(buffer, instrumentType, currentDiff, bpmHint, offsetHint);
     
     // Convert to the game's internal format
     // Group notes by timestamp for chords
@@ -98,9 +100,14 @@ export function useAudioEngine() {
       if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
       let analyzeBufferP1: AudioBuffer;
       let analyzeBufferP2: AudioBuffer | null = null;
+      let globalBpmHint: number | undefined = undefined;
+      let globalOffsetHint: number | undefined = undefined;
 
       if (song.stems) {
         const stemUrls = [song.stems.vocals, song.stems.other, song.stems.drums, song.stems.bass];
+        const hasMetronome = !!song.stems.metronome;
+        if (hasMetronome) stemUrls.push(song.stems.metronome!);
+        
         const progressMap = new Map<number, { loaded: number, total: number }>();
         const updateGlobalProgress = () => {
           let totalLoaded = 0, totalSize = 0;
@@ -114,8 +121,19 @@ export function useAudioEngine() {
           })
         ));
         if (stemBuffers.some(b => b === null)) throw new Error("Failed to download stems");
-        const [vocBuf, otherBuf, drumBuf, bassBuf] = await Promise.all(stemBuffers.map(buf => audioCtxRef.current!.decodeAudioData(buf!)));
+        const decodePromises = stemBuffers.map(buf => audioCtxRef.current!.decodeAudioData(buf!));
+        const decodedBuffers = await Promise.all(decodePromises);
+        
+        const [vocBuf, otherBuf, drumBuf, bassBuf] = decodedBuffers;
+        const metronomeBuf = hasMetronome ? decodedBuffers[4] : null;
+
         audioBufferRef.current = { vocals: vocBuf, other: otherBuf, drums: drumBuf, bass: bassBuf };
+        
+        if (metronomeBuf) {
+          const metroData = await analyzeMetronome(metronomeBuf);
+          globalBpmHint = metroData.bpm;
+          globalOffsetHint = metroData.firstBeatOffset;
+        }
         
         if (gameMode === 'multiplayer') {
           analyzeBufferP1 = otherBuf; // P1 is Guitar
@@ -140,10 +158,10 @@ export function useAudioEngine() {
       }
       setIsAnalyzing(true);
       
-      await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, gameMode === 'multiplayer' ? 'other' : instrumentMode);
+      await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, gameMode === 'multiplayer' ? 'other' : instrumentMode, globalBpmHint, globalOffsetHint);
       
       if (analyzeBufferP2) {
-        await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums'); // P2 is always Drums in multiplayer
+        await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums', globalBpmHint, globalOffsetHint); // P2 is always Drums in multiplayer
       } else {
         beatMapP2Ref.current = [];
       }
