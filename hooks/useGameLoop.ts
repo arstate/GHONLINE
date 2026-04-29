@@ -397,8 +397,8 @@ export function useGameLoop({
         trackScrollYRef.current += speed * deltaTime * 0.95;
         const ts1 = document.getElementById('trackSurfaceP1');
         const ts2 = document.getElementById('trackSurfaceP2');
-        if (ts1) ts1.style.transform = `translateY(${(trackScrollYRef.current % 640)}px)`;
-        if (ts2) ts2.style.transform = `translateY(${(trackScrollYRef.current % 640)}px)`;
+        if (ts1) ts1.style.backgroundPositionY = `${trackScrollYRef.current}px`;
+        if (ts2) ts2.style.backgroundPositionY = `${trackScrollYRef.current}px`;
 
         if (audioCtxRef.current) {
           const pbTime = (audioCtxRef.current.currentTime - startTimeRef.current) + (audioOffset / 1000);

@@ -375,28 +375,65 @@ export default function RhythmGame() {
         <div className="relative w-full h-full shadow-2xl bg-black flex flex-col overflow-hidden">
           <div ref={mainContainerRef} className="relative w-full h-full overflow-hidden bg-[#000000]">
             <div ref={trackContainerRef} className="absolute overflow-hidden" style={{ width: 1280, height: 720, transformOrigin: 'center center' }}>
-              <div className="absolute inset-0 pointer-events-none flex" style={{ transformStyle: 'preserve-3d' }}>
-                <div className="absolute top-[0px] left-0 w-full h-[350px] z-[15] bg-gradient-to-b from-black via-black/80 to-transparent" />
-                
-                {/* Track P1 Container */}
-                <div className={cn("relative h-full overflow-hidden shrink-0", gameMode === 'multiplayer' ? "w-1/2" : "w-full")} style={{ perspective: 400, perspectiveOrigin: '50% 180px', transformStyle: 'preserve-3d' }}>
-                  <div className="w-full h-full" style={{ clipPath: 'polygon(38% 20%, 62% 20%, 105% 100%, -5% 100%)', transformStyle: 'preserve-3d' }}>
-                    <div style={{ position: 'absolute', left: '50%', width: 700, top: 620, height: 5000, marginLeft: -350, transformOrigin: 'center 0', transform: 'rotateX(90deg)', transformStyle: 'preserve-3d' }}>
-                      <div id="trackSurfaceP1" style={{ position: 'absolute', left: 0, width: '100%', top: -2000, height: 10000, backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')", backgroundSize: "700px 640px", opacity: 0.8, willChange: 'transform' }} />
-                    </div>
+              {/* TEXTURE LAYER - ROTASI 90 DERAJAT SEMPURNA */}
+              <div className="absolute inset-0 z-0 pointer-events-none">
+                {gameMode === 'single' ? (
+                  <div className="absolute inset-0" style={{ perspective: '400px', perspectiveOrigin: '50% 180px' }}>
+                     <div id="trackSurfaceP1" className="absolute" 
+                          style={{ 
+                            left: '50%', 
+                            bottom: '0px', // Full screen bottom
+                            width: '700px', 
+                            height: '4000px', 
+                            marginLeft: '-350px',
+                            transformOrigin: 'center calc(100% - 100px)', // Pivot remains at Y=620
+                            transform: 'rotateX(90deg)',      // Rebahan sempurna jadi lantai 3D
+                            backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
+                            backgroundRepeat: 'repeat-y', 
+                            backgroundSize: '100% 400px',
+                            opacity: 0.8 
+                          }} />
                   </div>
-                </div>
-
-                {/* Track P2 Container */}
-                {gameMode === 'multiplayer' && (
-                  <div className="relative h-full w-1/2 overflow-hidden shrink-0" style={{ perspective: 400, perspectiveOrigin: '50% 180px', transformStyle: 'preserve-3d' }}>
-                    <div className="w-full h-full" style={{ clipPath: 'polygon(38% 20%, 62% 20%, 105% 100%, -5% 100%)', transformStyle: 'preserve-3d' }}>
-                      <div style={{ position: 'absolute', left: '50%', width: 700, top: 620, height: 5000, marginLeft: -350, transformOrigin: 'center 0', transform: 'rotateX(90deg)', transformStyle: 'preserve-3d' }}>
-                        <div id="trackSurfaceP2" style={{ position: 'absolute', left: 0, width: '100%', top: -2000, height: 10000, backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')", backgroundSize: "700px 640px", opacity: 0.8, willChange: 'transform' }} />
-                      </div>
+                ) : (
+                  <>
+                    {/* P1 Kiri (Multiplayer) */}
+                    <div className="absolute top-0 left-0 w-1/2 h-full" style={{ perspective: '400px', perspectiveOrigin: '50% 180px' }}>
+                       <div id="trackSurfaceP1" className="absolute" 
+                            style={{ 
+                              left: '50%', 
+                              bottom: '0px', 
+                              width: '350px', 
+                              height: '4000px', 
+                              marginLeft: '-175px', 
+                              transformOrigin: 'center calc(100% - 100px)', 
+                              transform: 'rotateX(90deg)', 
+                              backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
+                              backgroundRepeat: 'repeat-y', 
+                              backgroundSize: '100% 200px', 
+                              opacity: 0.8 
+                            }} />
                     </div>
-                  </div>
+                    {/* P2 Kanan (Multiplayer) */}
+                    <div className="absolute top-0 right-0 w-1/2 h-full" style={{ perspective: '400px', perspectiveOrigin: '50% 180px' }}>
+                       <div id="trackSurfaceP2" className="absolute" 
+                            style={{ 
+                              left: '50%', 
+                              bottom: '0px', 
+                              width: '350px', 
+                              height: '4000px', 
+                              marginLeft: '-175px', 
+                              transformOrigin: 'center calc(100% - 100px)', 
+                              transform: 'rotateX(90deg)', 
+                              backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
+                              backgroundRepeat: 'repeat-y', 
+                              backgroundSize: '100% 200px', 
+                              opacity: 0.8 
+                            }} />
+                    </div>
+                  </>
                 )}
+                {/* Efek Kabut Horizon agar teksturnya membaur perlahan dengan gelap */}
+                <div className="absolute top-0 left-0 w-full h-[250px] z-10 bg-gradient-to-b from-black via-black/90 to-transparent" />
               </div>
 
               <canvas ref={canvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full touch-none z-20 bg-transparent" />
