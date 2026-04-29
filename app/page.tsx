@@ -23,6 +23,8 @@ export default function RhythmGame() {
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const [videoDownloadProgress, setVideoDownloadProgress] = useState(0);
+  const [videoDownloadedBytes, setVideoDownloadedBytes] = useState(0);
+  const [videoTotalBytes, setVideoTotalBytes] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const VIDEO_SOURCE_URL = "https://res.cloudinary.com/dxghgdt9t/video/upload/v1777434968/8K_60FPS_Paranoid_-_Black_Sabbath_-_Pandora_720p_h264_ytllwb.mp4";
 
@@ -43,16 +45,19 @@ export default function RhythmGame() {
           if (done) break;
           chunks.push(value);
           receivedLength += value.length;
+          setVideoDownloadedBytes(receivedLength);
           if (contentLength) {
+            setVideoTotalBytes(contentLength);
             setVideoDownloadProgress(Math.round((receivedLength / contentLength) * 100));
           }
         }
 
-        const blob = new Blob(chunks);
+        const blob = new Blob(chunks, { type: 'video/mp4' });
         const url = URL.createObjectURL(blob);
         setVideoBlobUrl(url);
       } catch (e) {
         console.error("Failed to pre-download video:", e);
+        setVideoBlobUrl("error");
       }
     };
     downloadVideo();
@@ -424,19 +429,16 @@ export default function RhythmGame() {
         />
       )}
         <div className="relative w-full h-full shadow-2xl bg-black flex flex-col overflow-hidden">
-          <div ref={mainContainerRef} className="relative w-full h-full overflow-hidden">
-            {/* BLACK FALLBACK */}
-            <div className="absolute inset-0 bg-black z-[-2]" />
-            
+          <div ref={mainContainerRef} className="relative w-full h-full overflow-hidden bg-black z-0">
             {/* BACKGROUND VIDEO */}
-            {videoBlobUrl && (
+            {videoBlobUrl && videoBlobUrl !== "error" && (
               <video 
                 ref={videoRef}
                 muted 
                 playsInline 
                 className={cn(
-                  "absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 z-[-1]",
-                  (gameState === 'game' || gameState === 'paused' || gameState === 'resuming' || gameState === 'countdown') ? "opacity-40" : "opacity-0"
+                  "absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 z-10",
+                  (gameState === 'game' || gameState === 'paused' || gameState === 'resuming' || gameState === 'countdown') ? "opacity-60" : "opacity-0"
                 )}
                 onEnded={() => {
                   if (videoRef.current) {
@@ -448,9 +450,15 @@ export default function RhythmGame() {
                 <source src={videoBlobUrl} type="video/mp4" />
               </video>
             )}
-            <div ref={trackContainerRef} className="absolute overflow-hidden z-10" style={{ width: 1280, height: 720, transformOrigin: 'center center' }}>
+            <div ref={trackContainerRef} className="absolute overflow-hidden z-20" style={{ width: 1280, height: 720, transformOrigin: 'center center' }}>
               {/* TEXTURE LAYER - ROTASI 90 DERAJAT SEMPURNA */}
-              <div className="absolute inset-0 z-0 pointer-events-none">
+              <div 
+                className="absolute inset-0 z-0 pointer-events-none" 
+                style={{ 
+                  maskImage: 'linear-gradient(to bottom, transparent 180px, transparent 250px, black 450px)',
+                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 180px, transparent 250px, black 450px)'
+                }}
+              >
                 {gameMode === 'single' ? (
                   <div className="absolute inset-0" style={{ perspective: '400px', perspectiveOrigin: '50% 180px' }}>
                      <div id="trackSurfaceP1" className="absolute" 
@@ -465,7 +473,7 @@ export default function RhythmGame() {
                             backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                             backgroundRepeat: 'repeat-y', 
                             backgroundSize: '100% 400px',
-                            opacity: 0.8 
+                            opacity: 1
                           }} />
                   </div>
                 ) : (
@@ -484,7 +492,7 @@ export default function RhythmGame() {
                               backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                               backgroundRepeat: 'repeat-y', 
                               backgroundSize: '100% 200px', 
-                              opacity: 0.8 
+                              opacity: 1 
                             }} />
                     </div>
                     {/* P2 Kanan (Multiplayer) */}
@@ -501,13 +509,11 @@ export default function RhythmGame() {
                               backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                               backgroundRepeat: 'repeat-y', 
                               backgroundSize: '100% 200px', 
-                              opacity: 0.8 
+                              opacity: 1 
                             }} />
                     </div>
                   </>
                 )}
-                {/* Efek Kabut Horizon agar teksturnya membaur perlahan dengan gelap */}
-                <div className="absolute top-0 left-0 w-full h-[250px] z-10 bg-gradient-to-b from-black via-black/90 to-transparent" />
               </div>
 
               <canvas ref={canvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full touch-none z-20 bg-transparent" />
@@ -536,6 +542,8 @@ export default function RhythmGame() {
             isLoadingSong={isLoadingSong}
             loadingProgress={loadingProgress}
             videoDownloadProgress={videoDownloadProgress}
+            videoDownloadedBytes={videoDownloadedBytes}
+            videoTotalBytes={videoTotalBytes}
             videoBlobUrl={videoBlobUrl}
             isAnalyzing={isAnalyzing}
             score={score}

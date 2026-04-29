@@ -14,6 +14,8 @@ interface ModalsProps {
   isLoadingSong: boolean;
   loadingProgress: number;
   videoDownloadProgress: number;
+  videoDownloadedBytes: number;
+  videoTotalBytes: number;
   videoBlobUrl: string | null;
   isAnalyzing: boolean;
   score: number;
@@ -39,6 +41,8 @@ export function Modals({
   isLoadingSong,
   loadingProgress,
   videoDownloadProgress,
+  videoDownloadedBytes,
+  videoTotalBytes,
   videoBlobUrl,
   isAnalyzing,
   score,
@@ -200,21 +204,26 @@ export function Modals({
       )}
 
       {/* Loading Overlay */}
-      {(isLoadingSong || isAnalyzing || (videoDownloadProgress > 0 && videoDownloadProgress < 100)) && (
+      {(isLoadingSong || isAnalyzing || videoBlobUrl === null) && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] backdrop-blur-sm transition-all animate-in fade-in duration-300">
           <div className="text-center px-6">
             <div className="relative w-24 h-24 mx-auto mb-8 flex items-center justify-center">
                 <div className="absolute inset-0 border-4 border-emerald-500/20 rounded-full"></div>
                 <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
                 <div className="text-emerald-500 font-black text-xl z-10">
-                  {videoDownloadProgress < 100 ? `${videoDownloadProgress}%` : (isLoadingSong && !isAnalyzing ? `${loadingProgress}%` : "")}
+                  {videoBlobUrl === null ? `${videoDownloadProgress}%` : (isLoadingSong && !isAnalyzing ? `${loadingProgress}%` : "")}
                 </div>
             </div>
             <h3 className="text-emerald-500 font-black text-2xl tracking-[0.2em] uppercase mb-3 drop-shadow-[0_0_100px_rgba(16,185,129,0.3)]">
-              {videoDownloadProgress < 100 ? "Buffering Background Video" : (isAnalyzing ? "Analyzing Spectrum" : "Loading Track")}
+              {videoBlobUrl === null ? "Buffering Background Video" : (isAnalyzing ? "Analyzing Spectrum" : "Loading Track")}
             </h3>
+            {videoBlobUrl === null && videoTotalBytes > 0 ? (
+              <p className="text-white/60 font-bold text-xs tracking-widest uppercase animate-pulse mb-3">
+                {(videoDownloadedBytes / 1024 / 1024).toFixed(1)}MB / {(videoTotalBytes / 1024 / 1024).toFixed(1)}MB
+              </p>
+            ) : null}
             <p className="text-white/60 font-bold text-xs tracking-widest uppercase animate-pulse">
-              {videoDownloadProgress < 100 ? "Caching High-Bitrate Visuals..." : (isAnalyzing ? "Mapping Genre-Adaptive Peaks..." : "Buffering Audio Stream...")}
+              {videoBlobUrl === null ? "Caching High-Bitrate Visuals..." : (isAnalyzing ? "Mapping Genre-Adaptive Peaks..." : "Buffering Audio Stream...")}
             </p>
           </div>
         </div>

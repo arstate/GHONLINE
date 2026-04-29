@@ -557,16 +557,18 @@ export function useGameLoop({
 
       const horizonY = getScreenY(START_Z);
       const fG = ctx.createLinearGradient(0, horizonY, 0, horizonY + 200);
-      fG.addColorStop(0, '#000'); 
-      fG.addColorStop(0.3, '#000'); // Keep it solid for a bit longer
-      fG.addColorStop(1, 'transparent');
+      fG.addColorStop(0, 'rgba(0,0,0,1)'); 
+      fG.addColorStop(0.3, 'rgba(0,0,0,1)'); // Keep it solid for a bit longer
+      fG.addColorStop(1, 'rgba(0,0,0,0)');
       
+      ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = fG; 
       ctx.fillRect(0, 0, width, horizonY + 200);
       
-      // Solid black header to mask notes that are behind the vanishing point
-      ctx.fillStyle = '#000';
+      // Solid erase header to mask notes that are behind the vanishing point
+      ctx.fillStyle = 'rgba(0,0,0,1)';
       ctx.fillRect(0, 0, width, horizonY);
+      ctx.globalCompositeOperation = 'source-over';
 
       animationId = requestAnimationFrame(loop);
     };
