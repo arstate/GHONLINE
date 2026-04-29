@@ -69,7 +69,7 @@ export function useGameLoop({
   const BASE_Y_OFFSET = 500;
   
   const getSpeedZ = useCallback(() => {
-    const speedMap: Record<string, number> = { easy: 400, normal: 600, hard: 1000, expert: 1200 };
+    const speedMap: Record<string, number> = { easy: 400, normal: 600, hard: 1000, expert: 1000 };
     return speedMap[difficulty] || 600;
   }, [difficulty]);
 
@@ -79,12 +79,12 @@ export function useGameLoop({
     if (gameMode === 'multiplayer') {
       const p1Str = scoreP1Ref.current.toString().padStart(6, '0');
       const p2Str = scoreP2Ref.current.toString().padStart(6, '0');
-      if (s1) s1.innerText = `${p1Str} | ${p2Str}`;
-      if (s2) s2.innerText = `${p1Str} | ${p2Str}`;
+      if (s1) s1.textContent = `${p1Str} | ${p2Str}`;
+      if (s2) s2.textContent = `${p1Str} | ${p2Str}`;
     } else {
       const str = scoreP1Ref.current.toString().padStart(6, '0');
-      if (s1) s1.innerText = str;
-      if (s2) s2.innerText = str;
+      if (s1) s1.textContent = str;
+      if (s2) s2.textContent = str;
     }
   }, [gameMode]);
 
@@ -136,6 +136,7 @@ export function useGameLoop({
         if (audioGainNodeRef.current && audioCtxRef.current) {
             const now = audioCtxRef.current.currentTime;
             audioGainNodeRef.current.gain.cancelScheduledValues(now);
+            audioGainNodeRef.current.gain.setValueAtTime(audioGainNodeRef.current.gain.value, now);
             audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.02);
         }
         const note = notes[hitIndex];
@@ -143,13 +144,6 @@ export function useGameLoop({
             notes.splice(hitIndex, 1);
             scoreP1Ref.current += (minDiff <= 50 ? 10 : 5);
             laneHitStatesP1Ref.current[laneIndex] = 0.15;
-            
-            // Restore audio on hit
-            if (audioGainNodeRef.current && audioCtxRef.current) {
-                const now = audioCtxRef.current.currentTime;
-                audioGainNodeRef.current.gain.cancelScheduledValues(now);
-                audioGainNodeRef.current.gain.linearRampToValueAtTime(1.0, now + 0.1);
-            }
         } else if (note.type === 'hold') {
             note.isActiveHold = true;
             activeHoldsP1Ref.current[laneIndex] = note;
@@ -185,6 +179,7 @@ export function useGameLoop({
         if (gain && audioCtxRef.current) {
             const now = audioCtxRef.current.currentTime;
             gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(gain.gain.value, now);
             gain.gain.linearRampToValueAtTime(1.0, now + 0.02);
         }
         const note = notes[hitIndex];
@@ -192,14 +187,6 @@ export function useGameLoop({
             notes.splice(hitIndex, 1);
             scoreP2Ref.current += (minDiff <= 50 ? 10 : 5);
             laneHitStatesP2Ref.current[laneIndex] = 0.15;
-
-            // Restore audio on hit
-            const gain = gameMode === 'multiplayer' ? audioGainP2Ref.current : audioGainNodeRef.current;
-            if (gain && audioCtxRef.current) {
-                const now = audioCtxRef.current.currentTime;
-                gain.gain.cancelScheduledValues(now);
-                gain.gain.linearRampToValueAtTime(1.0, now + 0.1);
-            }
         } else if (note.type === 'hold') {
             note.isActiveHold = true;
             activeHoldsP2Ref.current[laneIndex] = note;
