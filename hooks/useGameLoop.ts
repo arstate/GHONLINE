@@ -555,19 +555,18 @@ export function useGameLoop({
         renderTrack(notesP1Ref.current, width * 0.5, activeLanesP1Ref.current, activeHoldsP1Ref.current, laneHitStatesP1Ref.current, p1Keys);
       }
 
-      const horizonY = getScreenY(START_Z);
-      const fG = ctx.createLinearGradient(0, horizonY, 0, horizonY + 200);
+      const fG = ctx.createLinearGradient(0, 320, 0, 370);
       fG.addColorStop(0, 'rgba(0,0,0,1)'); 
       fG.addColorStop(0.3, 'rgba(0,0,0,1)'); // Keep it solid for a bit longer
       fG.addColorStop(1, 'rgba(0,0,0,0)');
       
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = fG; 
-      ctx.fillRect(0, 0, width, horizonY + 200);
+      ctx.fillRect(0, 0, width, 370);
       
       // Solid erase header to mask notes that are behind the vanishing point
       ctx.fillStyle = 'rgba(0,0,0,1)';
-      ctx.fillRect(0, 0, width, horizonY);
+      ctx.fillRect(0, 0, width, 320);
       ctx.globalCompositeOperation = 'source-over';
 
       animationId = requestAnimationFrame(loop);

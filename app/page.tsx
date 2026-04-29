@@ -455,8 +455,8 @@ export default function RhythmGame() {
               <div 
                 className="absolute inset-0 z-0 pointer-events-none" 
                 style={{ 
-                  maskImage: 'linear-gradient(to bottom, transparent 180px, transparent 250px, black 450px)',
-                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 180px, transparent 250px, black 450px)'
+                  maskImage: 'linear-gradient(to bottom, transparent 280px, transparent 330px, black 350px)',
+                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 280px, transparent 330px, black 350px)'
                 }}
               >
                 {gameMode === 'single' ? (
