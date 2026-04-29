@@ -446,6 +446,12 @@ export default function RhythmGame() {
                     videoRef.current.play();
                   }
                 }}
+                onTimeUpdate={(e) => {
+                  const video = e.currentTarget;
+                  if (video.currentTime >= 180 && gameState !== 'lobby' && gameState !== 'postgame') {
+                    video.currentTime = 5;
+                  }
+                }}
               >
                 <source src={videoBlobUrl} type="video/mp4" />
               </video>
