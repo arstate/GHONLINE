@@ -11,6 +11,23 @@ import { Lobby } from '../components/Lobby';
 import { GameOverlay } from '../components/GameOverlay';
 import { Modals } from '../components/Modals';
 
+const VIDEO_SOURCE_URL = "https://res.cloudinary.com/dxghgdt9t/video/upload/v1777434968/8K_60FPS_Paranoid_-_Black_Sabbath_-_Pandora_720p_h264_ytllwb.mp4";
+const HIT_BUTTON_URLS = [
+  "https://ia601406.us.archive.org/2/items/1_20260429_20260429_1230/1.png", // Green
+  "https://ia800407.us.archive.org/21/items/2_20260429_20260429_1300/2.png", // Red
+  "https://ia601608.us.archive.org/18/items/3_20260429_20260429_1300/3.png", // Yellow
+  "https://ia800702.us.archive.org/2/items/4_20260429_20260429_1300/4.png", // Blue
+  "https://ia902909.us.archive.org/3/items/5_20260429_20260429_1301/5.png"  // Orange
+];
+
+const HIT_BUTTON_PRESSED_URLS = [
+  "https://ia601803.us.archive.org/21/items/1_20260429_20260429_1439/1.png", // Green Pressed
+  "https://ia903203.us.archive.org/12/items/2_20260429_20260429_1439/2.png", // Red Pressed
+  "https://ia800505.us.archive.org/13/items/3_20260429_20260429_1439/3.png", // Yellow Pressed
+  "https://ia803203.us.archive.org/4/items/4_20260429_20260429_1439/4.png", // Blue Pressed
+  "https://ia800607.us.archive.org/14/items/5_20260429_20260429_1439/5.png"  // Orange Pressed
+];
+
 export default function RhythmGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trackContainerRef = useRef<HTMLDivElement>(null);
@@ -22,16 +39,47 @@ export default function RhythmGame() {
   const [gameMode, setGameMode] = useState<'single' | 'multiplayer'>('single');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
+  const [hitButtonImgs, setHitButtonImgs] = useState<HTMLImageElement[]>([]);
+  const [hitButtonPressedImgs, setHitButtonPressedImgs] = useState<HTMLImageElement[]>([]);
   const [videoDownloadProgress, setVideoDownloadProgress] = useState(0);
   const [videoDownloadedBytes, setVideoDownloadedBytes] = useState(0);
   const [videoTotalBytes, setVideoTotalBytes] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const VIDEO_SOURCE_URL = "https://res.cloudinary.com/dxghgdt9t/video/upload/v1777434968/8K_60FPS_Paranoid_-_Black_Sabbath_-_Pandora_720p_h264_ytllwb.mp4";
 
-  // Pre-download video for caching
+  // Pre-download video and assets for caching
   useEffect(() => {
-    const downloadVideo = async () => {
+    const downloadAssets = async () => {
       try {
+        // Download all Hit Button Images
+        const imgPromises = HIT_BUTTON_URLS.map(url => {
+          return new Promise<HTMLImageElement>((res, rej) => {
+            const img = new Image();
+            img.src = url;
+            img.crossOrigin = "anonymous";
+            img.onload = () => res(img);
+            img.onerror = rej;
+          });
+        });
+
+        const pressedImgPromises = HIT_BUTTON_PRESSED_URLS.map(url => {
+          return new Promise<HTMLImageElement>((res, rej) => {
+            const img = new Image();
+            img.src = url;
+            img.crossOrigin = "anonymous";
+            img.onload = () => res(img);
+            img.onerror = rej;
+          });
+        });
+
+        const [loadedImgs, loadedPressedImgs] = await Promise.all([
+          Promise.all(imgPromises),
+          Promise.all(pressedImgPromises)
+        ]);
+
+        setHitButtonImgs(loadedImgs);
+        setHitButtonPressedImgs(loadedPressedImgs);
+
+        // Download Video
         const response = await fetch(VIDEO_SOURCE_URL);
         if (!response.body) return;
         
@@ -60,7 +108,7 @@ export default function RhythmGame() {
         setVideoBlobUrl("error");
       }
     };
-    downloadVideo();
+    downloadAssets();
   }, []);
 
   // Sync video with game state
@@ -187,7 +235,9 @@ export default function RhythmGame() {
     onGameEnd: handleGameEnd,
     p1Keys,
     p2Keys,
-    audioOffset
+    audioOffset,
+    hitButtonImgs,
+    hitButtonPressedImgs
   });
 
   useEffect(() => {

@@ -46,7 +46,9 @@ export function useGameLoop({
   onGameEnd,
   p1Keys,
   p2Keys,
-  audioOffset
+  audioOffset,
+  hitButtonImgs,
+  hitButtonPressedImgs
 }: any) {
   const notesP1Ref = useRef<Note[]>([]);
   const notesP2Ref = useRef<Note[]>([]);
@@ -501,25 +503,34 @@ export function useGameLoop({
           const x = getScreenX((i - 2) * LANE_GAP, 0, vpX);
           const y = getScreenY(0);
           const s = getScale(0);
-          const isHit = activeHolds[i] !== null || hitStates[i] > 0;
-          ctx.beginPath();
-          ctx.ellipse(x, y, (gameMode === 'multiplayer' ? 30 : 60) * s, (gameMode === 'multiplayer' ? 11 : 22) * s, 0, 0, Math.PI * 2);
-          ctx.strokeStyle = activeLanes[i] ? '#ffffff' : COLORS[i];
-          ctx.lineWidth = activeLanes[i] ? 6 : 3;
-          ctx.stroke();
-          if (isHit) drawPuck(ctx, x, y, COLORS[i], s, false, true);
-          else if (activeLanes[i]) { 
-            ctx.fillStyle = COLORS[i] + '33'; 
-            ctx.beginPath();
-            ctx.ellipse(x, y, (gameMode === 'multiplayer' ? 30 : 60) * s, (gameMode === 'multiplayer' ? 11 : 22) * s, 0, 0, Math.PI * 2);
-            ctx.fill();
+
+          const hitImg = hitButtonImgs && hitButtonImgs[i];
+          const pressedImg = hitButtonPressedImgs && hitButtonPressedImgs[i];
+          const isPressed = activeLanes[i];
+
+          if (hitImg) {
+            const imgWidth = (gameMode === 'multiplayer' ? 62 : 132) * s;
+            const imgHeight = (gameMode === 'multiplayer' ? 25 : 53) * s;
+            
+            // Add soft drop shadow for 3D/Ambient Occlusion effect
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 10 * s;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 8 * s;
+            
+            // Draw idle image
+            // Menambahkan (4 * s) untuk menggeser sedikit ke bawah
+            ctx.drawImage(hitImg, x - imgWidth / 2, y - imgHeight / 2 + (4 * s), imgWidth, imgHeight);
+            ctx.restore();
+
+            // Draw pressed image overlay if active
+            if (isPressed && pressedImg) {
+              ctx.drawImage(pressedImg, x - imgWidth / 2, y - imgHeight / 2 + (4 * s), imgWidth, imgHeight);
+            }
           }
-          
-          ctx.fillStyle = activeLanes[i] ? '#fff' : 'rgba(255,255,255,0.7)';
-          ctx.font = `bold ${gameMode === 'multiplayer' ? 14 : 20}px sans-serif`;
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          const label = keys[i].length > 1 ? keys[i].substring(0, 3) : keys[i].toUpperCase();
-          ctx.fillText(label, x, y + (gameMode === 'multiplayer' ? 25 : 40));
+
+
         }
 
         const sorted = [...notes].sort((a, b) => b.z - a.z);
@@ -649,7 +660,7 @@ export function useGameLoop({
       canvas.removeEventListener('pointerdown', handlePointerDown as any);
       canvas.removeEventListener('pointerup', handlePointerUp as any);
     };
-  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, audioGainP2Ref, beatMapRef, beatMapP2Ref, difficulty, instrumentMode, gameMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHitP1, triggerHitP2, triggerMissP1, triggerMissP2, triggerReleaseP1, triggerReleaseP2, p1Keys, p2Keys, audioOffset, START_Z]);
+  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, audioGainP2Ref, beatMapRef, beatMapP2Ref, difficulty, instrumentMode, gameMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHitP1, triggerHitP2, triggerMissP1, triggerMissP2, triggerReleaseP1, triggerReleaseP2, p1Keys, p2Keys, audioOffset, START_Z, hitButtonImgs, hitButtonPressedImgs]);
 
   return { startGameRequestRef };
 }
