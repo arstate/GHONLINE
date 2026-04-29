@@ -478,7 +478,8 @@ export default function RhythmGame() {
                             transform: 'rotateX(90deg)',      // Rebahan sempurna jadi lantai 3D
                             backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                             backgroundRepeat: 'repeat-y', 
-                            backgroundSize: '100% 400px',
+                            backgroundSize: '100% 408px',
+                            backgroundPosition: '0 -4px',
                             opacity: 1
                           }} />
                   </div>
@@ -497,7 +498,8 @@ export default function RhythmGame() {
                               transform: 'rotateX(90deg)', 
                               backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                               backgroundRepeat: 'repeat-y', 
-                              backgroundSize: '100% 200px', 
+                              backgroundSize: '100% 204px', 
+                              backgroundPosition: '0 -2px',
                               opacity: 1 
                             }} />
                     </div>
@@ -514,7 +516,8 @@ export default function RhythmGame() {
                               transform: 'rotateX(90deg)', 
                               backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                               backgroundRepeat: 'repeat-y', 
-                              backgroundSize: '100% 200px', 
+                              backgroundSize: '100% 204px', 
+                              backgroundPosition: '0 -2px',
                               opacity: 1 
                             }} />
                     </div>
