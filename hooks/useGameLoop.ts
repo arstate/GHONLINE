@@ -662,7 +662,7 @@ export function useGameLoop({
       canvas.removeEventListener('pointerdown', handlePointerDown as any);
       canvas.removeEventListener('pointerup', handlePointerUp as any);
     };
-  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, audioGainP2Ref, beatMapRef, beatMapP2Ref, difficulty, instrumentMode, gameMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHitP1, triggerHitP2, triggerMissP1, triggerMissP2, triggerReleaseP1, triggerReleaseP2, p1Keys, p2Keys, audioOffset]);
+  }, [canvasRef, gameStateRef, audioCtxRef, audioBufferRef, audioSourcesRef, audioGainNodeRef, audioGainP2Ref, beatMapRef, beatMapP2Ref, difficulty, instrumentMode, gameMode, onGameEnd, setGameState, getSpeedZ, syncScoreUI, triggerHitP1, triggerHitP2, triggerMissP1, triggerMissP2, triggerReleaseP1, triggerReleaseP2, p1Keys, p2Keys, audioOffset, START_Z]);
 
   return { startGameRequestRef };
 }

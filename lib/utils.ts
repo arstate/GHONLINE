@@ -86,6 +86,18 @@ export const defaultPlaylist: Song[] = [
       bass: "https://ia601608.us.archive.org/18/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-bass-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-bass-E%20minor-127bpm-440hz.mp3",
       metronome: "https://ia600507.us.archive.org/19/items/avenged-sevenfold-cosmic-official-visualizer-avenged-sevenfold-metronome-e-minor-127bpm-440hz/Avenged%20Sevenfold%20-%20Cosmic%20%28Official%20Visualizer%29%20-%20Avenged%20Sevenfold-metronome-E%20minor-127bpm-440hz.mp3"
     }
+  },
+  {
+    id: '11',
+    title: "Dewa 19 - Aku Milikmu (Multitrack)",
+    type: 'remote',
+    stems: {
+      vocals: "https://ia801500.us.archive.org/25/items/dewa-19-aku-milikmu-official-music-video-aquarius-musikindo-vocals-e-major-135bpm-441hz/Dewa%2019%20-%20Aku%20Milikmu%20Official%20Music%20Video%20-%20Aquarius%20Musikindo-vocals-E%20major-135bpm-441hz.mp3",
+      other: "https://ia902808.us.archive.org/12/items/dewa-19-aku-milikmu-official-music-video-aquarius-musikindo-other-e-major-135bpm-441hz/Dewa%2019%20-%20Aku%20Milikmu%20Official%20Music%20Video%20-%20Aquarius%20Musikindo-other-E%20major-135bpm-441hz.mp3",
+      drums: "https://ia601905.us.archive.org/31/items/dewa-19-aku-milikmu-official-music-video-aquarius-musikindo-drums-e-major-135bpm-441hz/Dewa%2019%20-%20Aku%20Milikmu%20Official%20Music%20Video%20-%20Aquarius%20Musikindo-drums-E%20major-135bpm-441hz.mp3",
+      bass: "https://ia601406.us.archive.org/27/items/dewa-19-aku-milikmu-official-music-video-aquarius-musikindo-bass-e-major-135bpm-441hz/Dewa%2019%20-%20Aku%20Milikmu%20Official%20Music%20Video%20-%20Aquarius%20Musikindo-bass-E%20major-135bpm-441hz.mp3",
+      metronome: "https://ia600505.us.archive.org/12/items/dewa-19-aku-milikmu-official-music-video-aquarius-musikindo-metronome-e-major-135bpm-441hz/Dewa%2019%20-%20Aku%20Milikmu%20Official%20Music%20Video%20-%20Aquarius%20Musikindo-metronome-E%20major-135bpm-441hz.mp3"
+    }
   }
 ];
 

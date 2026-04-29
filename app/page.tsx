@@ -440,6 +440,7 @@ export default function RhythmGame() {
                   "absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 z-10",
                   (gameState === 'game' || gameState === 'paused' || gameState === 'resuming' || gameState === 'countdown') ? "opacity-60" : "opacity-0"
                 )}
+                style={{ transform: 'translateZ(0)', willChange: 'transform' }}
                 onEnded={() => {
                   if (videoRef.current) {
                     videoRef.current.currentTime = 5;
@@ -475,12 +476,13 @@ export default function RhythmGame() {
                             height: '4000px', 
                             marginLeft: '-350px',
                             transformOrigin: 'center calc(100% - 100px)', // Pivot remains at Y=620
-                            transform: 'rotateX(90deg)',      // Rebahan sempurna jadi lantai 3D
+                            transform: 'rotateX(90deg) translateZ(0)',      // Rebahan sempurna jadi lantai 3D
                             backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                             backgroundRepeat: 'repeat-y', 
                             backgroundSize: '100% 408px',
                             backgroundPosition: '0 -4px',
-                            opacity: 1
+                            opacity: 1,
+                            willChange: 'background-position, transform'
                           }} />
                   </div>
                 ) : (
@@ -495,12 +497,13 @@ export default function RhythmGame() {
                               height: '4000px', 
                               marginLeft: '-175px', 
                               transformOrigin: 'center calc(100% - 100px)', 
-                              transform: 'rotateX(90deg)', 
+                              transform: 'rotateX(90deg) translateZ(0)', 
                               backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                               backgroundRepeat: 'repeat-y', 
                               backgroundSize: '100% 204px', 
                               backgroundPosition: '0 -2px',
-                              opacity: 1 
+                              opacity: 1,
+                              willChange: 'background-position, transform' 
                             }} />
                     </div>
                     {/* P2 Kanan (Multiplayer) */}
@@ -513,19 +516,20 @@ export default function RhythmGame() {
                               height: '4000px', 
                               marginLeft: '-175px', 
                               transformOrigin: 'center calc(100% - 100px)', 
-                              transform: 'rotateX(90deg)', 
+                              transform: 'rotateX(90deg) translateZ(0)', 
                               backgroundImage: `url('https://dn720801.ca.archive.org/0/items/track1_202604/track1.jpg')`, 
                               backgroundRepeat: 'repeat-y', 
                               backgroundSize: '100% 204px', 
                               backgroundPosition: '0 -2px',
-                              opacity: 1 
+                              opacity: 1,
+                              willChange: 'background-position, transform' 
                             }} />
                     </div>
                   </>
                 )}
               </div>
 
-              <canvas ref={canvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full touch-none z-20 bg-transparent" />
+              <canvas ref={canvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full touch-none z-20 bg-transparent" style={{ transform: 'translateZ(0)', willChange: 'transform' }} />
               
               <GameOverlay score={score} bpm={bpm} gameState={gameState} onPause={() => setGameState('paused')} />
             </div>
