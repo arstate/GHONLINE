@@ -44,7 +44,7 @@ export default function RhythmGame() {
       const saved = localStorage.getItem('rhytmika_p2_keys');
       if (saved) try { return JSON.parse(saved); } catch (e) {}
     }
-    return ['h', 'j', 'k', 'l', ';'];
+    return ['1', '2', '3', '4', '5'];
   });
 
   const [mappingPlayer, setMappingPlayer] = useState<1 | 2>(1);
@@ -380,7 +380,7 @@ export default function RhythmGame() {
                 
                 {/* Track P1 Container */}
                 <div className={cn("relative h-full overflow-hidden shrink-0", gameMode === 'multiplayer' ? "w-1/2" : "w-full")} style={{ perspective: 400, perspectiveOrigin: '50% 180px', transformStyle: 'preserve-3d' }}>
-                  <div className="w-full h-full" style={{ clipPath: 'polygon(38% 30%, 62% 30%, 105% 100%, -5% 100%)', transformStyle: 'preserve-3d' }}>
+                  <div className="w-full h-full" style={{ clipPath: 'polygon(38% 20%, 62% 20%, 105% 100%, -5% 100%)', transformStyle: 'preserve-3d' }}>
                     <div style={{ position: 'absolute', left: '50%', width: 700, top: 620, height: 5000, marginLeft: -350, transformOrigin: 'center 0', transform: 'rotateX(90deg)', transformStyle: 'preserve-3d' }}>
                       <div id="trackSurfaceP1" style={{ position: 'absolute', left: 0, width: '100%', top: -2000, height: 10000, backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')", backgroundSize: "700px 640px", opacity: 0.8, willChange: 'transform' }} />
                     </div>
@@ -390,7 +390,7 @@ export default function RhythmGame() {
                 {/* Track P2 Container */}
                 {gameMode === 'multiplayer' && (
                   <div className="relative h-full w-1/2 overflow-hidden shrink-0" style={{ perspective: 400, perspectiveOrigin: '50% 180px', transformStyle: 'preserve-3d' }}>
-                    <div className="w-full h-full" style={{ clipPath: 'polygon(38% 30%, 62% 30%, 105% 100%, -5% 100%)', transformStyle: 'preserve-3d' }}>
+                    <div className="w-full h-full" style={{ clipPath: 'polygon(38% 20%, 62% 20%, 105% 100%, -5% 100%)', transformStyle: 'preserve-3d' }}>
                       <div style={{ position: 'absolute', left: '50%', width: 700, top: 620, height: 5000, marginLeft: -350, transformOrigin: 'center 0', transform: 'rotateX(90deg)', transformStyle: 'preserve-3d' }}>
                         <div id="trackSurfaceP2" style={{ position: 'absolute', left: 0, width: '100%', top: -2000, height: 10000, backgroundImage: "url('https://ia902903.us.archive.org/12/items/track1_202604/track1.jpg')", backgroundSize: "700px 640px", opacity: 0.8, willChange: 'transform' }} />
                       </div>

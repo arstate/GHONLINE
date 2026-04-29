@@ -65,7 +65,7 @@ export function useGameLoop({
   const trackScrollYRef = useRef(0);
   
   const FOCAL_LENGTH = 250;
-  const START_Z = 1500;
+  const START_Z = gameMode === 'multiplayer' ? 1500 : 4000;
   const BASE_Y_OFFSET = 500;
   
   const getSpeedZ = useCallback(() => {
@@ -556,9 +556,17 @@ export function useGameLoop({
       }
 
       const horizonY = getScreenY(START_Z);
-      const fG = ctx.createLinearGradient(0, horizonY - 40, 0, horizonY + 100);
-      fG.addColorStop(0, '#000'); fG.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = fG; ctx.fillRect(0, 0, width, horizonY + 100);
+      const fG = ctx.createLinearGradient(0, horizonY, 0, horizonY + 200);
+      fG.addColorStop(0, '#000'); 
+      fG.addColorStop(0.3, '#000'); // Keep it solid for a bit longer
+      fG.addColorStop(1, 'transparent');
+      
+      ctx.fillStyle = fG; 
+      ctx.fillRect(0, 0, width, horizonY + 200);
+      
+      // Solid black header to mask notes that are behind the vanishing point
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, horizonY);
 
       animationId = requestAnimationFrame(loop);
     };
