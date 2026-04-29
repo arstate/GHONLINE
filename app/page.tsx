@@ -24,7 +24,7 @@ export default function RhythmGame() {
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const [videoDownloadProgress, setVideoDownloadProgress] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const VIDEO_SOURCE_URL = "https://ia902800.us.archive.org/32/items/8-k-60-fps-paranoid-black-sabbath-pandora-720p-h-264/%5B8K%2060FPS%5D%20Paranoid%20-%20Black%20Sabbath%20-%20Pandora%20%28720p%2C%20h264%29.mp4";
+  const VIDEO_SOURCE_URL = "https://res.cloudinary.com/dxghgdt9t/video/upload/v1777434968/8K_60FPS_Paranoid_-_Black_Sabbath_-_Pandora_720p_h264_ytllwb.mp4";
 
   // Pre-download video for caching
   useEffect(() => {
