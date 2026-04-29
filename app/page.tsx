@@ -424,7 +424,10 @@ export default function RhythmGame() {
         />
       )}
         <div className="relative w-full h-full shadow-2xl bg-black flex flex-col overflow-hidden">
-          <div ref={mainContainerRef} className="relative w-full h-full overflow-hidden bg-[#000000]">
+          <div ref={mainContainerRef} className="relative w-full h-full overflow-hidden">
+            {/* BLACK FALLBACK */}
+            <div className="absolute inset-0 bg-black z-[-2]" />
+            
             {/* BACKGROUND VIDEO */}
             {videoBlobUrl && (
               <video 
@@ -445,7 +448,7 @@ export default function RhythmGame() {
                 <source src={videoBlobUrl} type="video/mp4" />
               </video>
             )}
-            <div ref={trackContainerRef} className="absolute overflow-hidden" style={{ width: 1280, height: 720, transformOrigin: 'center center' }}>
+            <div ref={trackContainerRef} className="absolute overflow-hidden z-10" style={{ width: 1280, height: 720, transformOrigin: 'center center' }}>
               {/* TEXTURE LAYER - ROTASI 90 DERAJAT SEMPURNA */}
               <div className="absolute inset-0 z-0 pointer-events-none">
                 {gameMode === 'single' ? (
