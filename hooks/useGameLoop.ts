@@ -338,6 +338,11 @@ export function useGameLoop({
           const masterGain = ctx.createGain();
           masterGain.connect(ctx.destination);
           
+          const speedFactor = difficulty === 'hard' ? 1.5 : difficulty === 'extreme' ? 2.0 : 1.0;
+          const speedMultiplier = (window as any).customSpeedMultiplier || 1.0;
+          const speedZ = 1000 * speedFactor * speedMultiplier;
+          const delayT = START_Z / speedZ;
+
           if (audioBuffer instanceof AudioBuffer) {
              const source = ctx.createBufferSource();
              source.buffer = audioBuffer;
@@ -346,12 +351,13 @@ export function useGameLoop({
              audioGainNodeRef.current = penalty;
              source.connect(penalty); // Link P1/Single penalty
              audioSourcesRef.current = [source];
-             source.start();
-             startTimeRef.current = ctx.currentTime;
+             const startT = ctx.currentTime + delayT;
+             source.start(startT);
+             startTimeRef.current = startT;
           } else {
              const stems = ['vocals', 'other', 'drums', 'bass'] as const;
              const buffers = audioBuffer as any;
-             const startT = ctx.currentTime;
+             const startT = ctx.currentTime + delayT;
              stems.forEach(stem => {
                 const src = ctx.createBufferSource();
                 src.buffer = buffers[stem];
@@ -411,7 +417,8 @@ export function useGameLoop({
           while (spawnedIndexP1Ref.current < beatsP1.length) {
             const beat = beatsP1[spawnedIndexP1Ref.current];
             if (pbTime >= beat.time - fallT) {
-              beat.notes.forEach((bn: any) => notesP1Ref.current.push(new Note(bn.lane, START_Z, speed, bn.type, bn.duration * speed)));
+              const exactZ = START_Z - ((pbTime - (beat.time - fallT)) * speed);
+              beat.notes.forEach((bn: any) => notesP1Ref.current.push(new Note(bn.lane, exactZ, speed, bn.type, bn.duration * speed)));
               spawnedIndexP1Ref.current++;
             } else break;
           }
@@ -421,7 +428,8 @@ export function useGameLoop({
           while (spawnedIndexP2Ref.current < beatsP2.length) {
             const beat = beatsP2[spawnedIndexP2Ref.current];
             if (pbTime >= beat.time - fallT) {
-              beat.notes.forEach((bn: any) => notesP2Ref.current.push(new Note(bn.lane, START_Z, speed, bn.type, bn.duration * speed)));
+              const exactZ = START_Z - ((pbTime - (beat.time - fallT)) * speed);
+              beat.notes.forEach((bn: any) => notesP2Ref.current.push(new Note(bn.lane, exactZ, speed, bn.type, bn.duration * speed)));
               spawnedIndexP2Ref.current++;
             } else break;
           }

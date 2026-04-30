@@ -171,32 +171,65 @@ export function useAudioEngine() {
 
       const instrumentP1 = gameMode === 'multiplayer' ? 'other' : instrumentMode;
       const lookupDiff = difficulty === 'expert' ? 'extreme' : difficulty;
-      if (song.customBeatmap?.tracks?.[instrumentP1] && (lookupDiff === 'hard' || lookupDiff === 'extreme')) {
-        const beatmapStr = (song.customBeatmap.tracks[instrumentP1] as any)[lookupDiff];
-        if (beatmapStr) {
-          beatMapRef.current = parseCustomBeatmap(beatmapStr);
-          setBpm(song.customBeatmap.bpm);
+
+      const tryFetchBeatmap = async (songTitle: string, diff: string, inst: string) => {
+        try {
+          const track = inst === 'other' ? 'guitar' : inst;
+          const path = `/beatmaps/${songTitle}/${track}_${diff}.json`;
+          const resp = await fetch(path);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.beatmap && Array.isArray(data.beatmap)) {
+              return { beatmap: data.beatmap, bpm: data.bpm, speed: data.speed };
+            }
+            if (Array.isArray(data) && data.length > 0) {
+              return data;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch custom beatmap:", e);
+        }
+        return null;
+      };
+
+      const customP1 = await tryFetchBeatmap(song.title, lookupDiff, instrumentP1);
+      
+      const applyCustomBeatmap = (custom: any, ref: any) => {
+        if (custom.beatmap) {
+          ref.current = custom.beatmap;
+          if (custom.bpm) setBpm(custom.bpm);
+          if (custom.speed) {
+             if (!song.customBeatmap) song.customBeatmap = { bpm: custom.bpm || 120, speeds: {} };
+             if (!song.customBeatmap.speeds) song.customBeatmap.speeds = {};
+             song.customBeatmap.speeds[lookupDiff] = custom.speed;
+          }
+        } else {
+          ref.current = custom;
+          if (song.customBeatmap?.bpm) setBpm(song.customBeatmap.bpm);
+        }
+      };
+
+      if (customP1) {
+        applyCustomBeatmap(customP1, beatMapRef);
+      } else {
+        if (song.title === "Avenged Sevenfold - Cosmic (Multitrack)" && instrumentP1 === 'other') {
+          beatMapRef.current = [];
         } else {
           await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, instrumentP1, globalBpmHint, globalOffsetHint);
         }
-      } else {
-        await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, instrumentP1, globalBpmHint, globalOffsetHint);
       }
       
       if (analyzeBufferP2) {
-        if (song.customBeatmap?.tracks?.['drums'] && (lookupDiff === 'hard' || lookupDiff === 'extreme')) {
-          const beatmapStr = (song.customBeatmap.tracks['drums'] as any)[lookupDiff];
-          if (beatmapStr) {
-            beatMapP2Ref.current = parseCustomBeatmap(beatmapStr);
-          } else {
-            await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums', globalBpmHint, globalOffsetHint);
-          }
+        const customP2 = await tryFetchBeatmap(song.title, lookupDiff, 'drums');
+        if (customP2) {
+          applyCustomBeatmap(customP2, beatMapP2Ref);
         } else {
           await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums', globalBpmHint, globalOffsetHint);
         }
       } else {
         beatMapP2Ref.current = [];
       }
+
       setIsAnalyzing(false);
       return true;
     } catch (err) {
