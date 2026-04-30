@@ -1,11 +1,23 @@
-
-import { useRef, useState } from 'react';
-import { getSongBuffer, Song } from '../lib/utils';
-import { analyzeBeatMap, analyzeMetronome, InstrumentType } from '../lib/beatDetection';
+import { useRef, useState } from "react";
+import { getSongBuffer, Song } from "../lib/utils";
+import {
+  analyzeBeatMap,
+  analyzeMetronome,
+  InstrumentType,
+} from "../lib/beatDetection";
 
 export function useAudioEngine() {
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioBufferRef = useRef<AudioBuffer | { vocals: AudioBuffer, other: AudioBuffer, drums: AudioBuffer, bass: AudioBuffer } | null>(null);
+  const audioBufferRef = useRef<
+    | AudioBuffer
+    | {
+        vocals: AudioBuffer;
+        other: AudioBuffer;
+        drums: AudioBuffer;
+        bass: AudioBuffer;
+      }
+    | null
+  >(null);
   const audioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const audioGainNodeRef = useRef<GainNode | null>(null);
   const audioGainP2Ref = useRef<GainNode | null>(null);
@@ -16,18 +28,21 @@ export function useAudioEngine() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const fetchWithProgress = async (url: string, onProgress: (loaded: number, total: number) => void) => {
+  const fetchWithProgress = async (
+    url: string,
+    onProgress: (loaded: number, total: number) => void,
+  ) => {
     const response = await fetch(url);
     if (!response.body) return null;
-    
-    const contentLength = response.headers.get('content-length');
+
+    const contentLength = response.headers.get("content-length");
     const total = contentLength ? parseInt(contentLength, 10) : 0;
     let loaded = 0;
 
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
 
-    while(true) {
+    while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       chunks.push(value);
@@ -46,22 +61,32 @@ export function useAudioEngine() {
   };
 
   const analyzeAndGenerateBeatMap = async (
-    buffer: AudioBuffer, 
-    currentDiff: string, 
-    targetRef: any = beatMapRef, 
-    instrumentType: InstrumentType = 'other',
+    buffer: AudioBuffer,
+    currentDiff: string,
+    targetRef: any = beatMapRef,
+    instrumentType: InstrumentType = "other",
     bpmHint?: number,
-    offsetHint?: number
+    offsetHint?: number,
   ) => {
-    const detectedNotes = await analyzeBeatMap(buffer, instrumentType, currentDiff, bpmHint, offsetHint);
-    
+    const detectedNotes = await analyzeBeatMap(
+      buffer,
+      instrumentType,
+      currentDiff,
+      bpmHint,
+      offsetHint,
+    );
+
     // Convert to the game's internal format
     // Group notes by timestamp for chords
     const grouped: Record<string, any[]> = {};
-    detectedNotes.forEach(note => {
+    detectedNotes.forEach((note) => {
       const timeKey = note.time.toFixed(4);
       if (!grouped[timeKey]) grouped[timeKey] = [];
-      grouped[timeKey].push({ lane: note.lane, type: note.type, duration: note.duration });
+      grouped[timeKey].push({
+        lane: note.lane,
+        type: note.type,
+        duration: note.duration,
+      });
     });
 
     const beatMap = Object.entries(grouped)
@@ -73,8 +98,8 @@ export function useAudioEngine() {
     // Estimate BPM from intervals if not already set
     if (beatMap.length > 1) {
       let intervals = [];
-      for(let i=1; i < Math.min(beatMap.length, 100); i++) {
-        const diff = beatMap[i].time - beatMap[i-1].time;
+      for (let i = 1; i < Math.min(beatMap.length, 100); i++) {
+        const diff = beatMap[i].time - beatMap[i - 1].time;
         if (diff > 0.1) intervals.push(diff);
       }
       if (intervals.length > 0) {
@@ -92,8 +117,12 @@ export function useAudioEngine() {
     }
   };
 
-
-  const loadSong = async (song: Song, difficulty: string, instrumentMode: 'other' | 'drums' | 'bass', gameMode: 'single' | 'multiplayer' = 'single') => {
+  const loadSong = async (
+    song: Song,
+    difficulty: string,
+    instrumentMode: "other" | "drums" | "bass",
+    gameMode: "single" | "multiplayer" = "single",
+  ) => {
     setIsLoadingSong(true);
     setLoadingProgress(0);
     try {
@@ -104,83 +133,127 @@ export function useAudioEngine() {
       let globalOffsetHint: number | undefined = undefined;
 
       if (song.stems) {
-        const stemUrls = [song.stems.vocals, song.stems.other, song.stems.drums, song.stems.bass];
+        const stemUrls = [
+          song.stems.vocals,
+          song.stems.other,
+          song.stems.drums,
+          song.stems.bass,
+        ];
         const hasMetronome = !!song.stems.metronome;
         if (hasMetronome) stemUrls.push(song.stems.metronome!);
-        
-        const progressMap = new Map<number, { loaded: number, total: number }>();
+
+        const progressMap = new Map<
+          number,
+          { loaded: number; total: number }
+        >();
         const updateGlobalProgress = () => {
-          let totalLoaded = 0, totalSize = 0;
-          progressMap.forEach(p => { totalLoaded += p.loaded; totalSize += p.total; });
-          if (totalSize > 0) setLoadingProgress(Math.floor((totalLoaded / totalSize) * 100));
+          let totalLoaded = 0,
+            totalSize = 0;
+          progressMap.forEach((p) => {
+            totalLoaded += p.loaded;
+            totalSize += p.total;
+          });
+          if (totalSize > 0)
+            setLoadingProgress(Math.floor((totalLoaded / totalSize) * 100));
         };
-        const stemBuffers = await Promise.all(stemUrls.map((url, idx) => 
-          fetchWithProgress(url, (loaded, total) => {
-            progressMap.set(idx, { loaded, total });
-            updateGlobalProgress();
-          })
-        ));
-        if (stemBuffers.some(b => b === null)) throw new Error("Failed to download stems");
-        const decodePromises = stemBuffers.map(buf => audioCtxRef.current!.decodeAudioData(buf!));
+        const stemBuffers = await Promise.all(
+          stemUrls.map((url, idx) =>
+            fetchWithProgress(url, (loaded, total) => {
+              progressMap.set(idx, { loaded, total });
+              updateGlobalProgress();
+            }),
+          ),
+        );
+        if (stemBuffers.some((b) => b === null))
+          throw new Error("Failed to download stems");
+        const decodePromises = stemBuffers.map((buf) =>
+          audioCtxRef.current!.decodeAudioData(buf!),
+        );
         const decodedBuffers = await Promise.all(decodePromises);
-        
+
         const [vocBuf, otherBuf, drumBuf, bassBuf] = decodedBuffers;
         const metronomeBuf = hasMetronome ? decodedBuffers[4] : null;
 
-        audioBufferRef.current = { vocals: vocBuf, other: otherBuf, drums: drumBuf, bass: bassBuf };
-        
+        audioBufferRef.current = {
+          vocals: vocBuf,
+          other: otherBuf,
+          drums: drumBuf,
+          bass: bassBuf,
+        };
+
         if (metronomeBuf) {
           const metroData = await analyzeMetronome(metronomeBuf);
           globalBpmHint = metroData.bpm;
           globalOffsetHint = metroData.firstBeatOffset;
         }
-        
-        if (gameMode === 'multiplayer') {
+
+        if (gameMode === "multiplayer") {
           analyzeBufferP1 = otherBuf; // P1 is Guitar
-          analyzeBufferP2 = drumBuf;  // P2 is Drums
+          analyzeBufferP2 = drumBuf; // P2 is Drums
         } else {
-          analyzeBufferP1 = instrumentMode === 'drums' ? drumBuf : instrumentMode === 'bass' ? bassBuf : otherBuf;
+          analyzeBufferP1 =
+            instrumentMode === "drums"
+              ? drumBuf
+              : instrumentMode === "bass"
+                ? bassBuf
+                : otherBuf;
         }
       } else {
         let arrayBuffer: ArrayBuffer;
-        if (song.type === 'remote') {
-          const buffer = await fetchWithProgress(song.url!, (loaded, total) => { if (total > 0) setLoadingProgress(Math.floor((loaded / total) * 100)); });
+        if (song.type === "remote") {
+          const buffer = await fetchWithProgress(song.url!, (loaded, total) => {
+            if (total > 0)
+              setLoadingProgress(Math.floor((loaded / total) * 100));
+          });
           if (!buffer) throw new Error("Failed to download song");
           arrayBuffer = buffer;
         } else {
           arrayBuffer = await getSongBuffer(song.dbId!);
           setLoadingProgress(100);
         }
-        const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
+        const decodedBuffer =
+          await audioCtxRef.current.decodeAudioData(arrayBuffer);
         audioBufferRef.current = decodedBuffer;
         analyzeBufferP1 = decodedBuffer;
-        if (gameMode === 'multiplayer') analyzeBufferP2 = decodedBuffer;
+        if (gameMode === "multiplayer") analyzeBufferP2 = decodedBuffer;
       }
       setIsAnalyzing(true);
-      
+
       const parseCustomBeatmap = (str: string) => {
         const beats: any[] = [];
-        const parts = str.split(',');
+        const parts = str.split(",");
         parts.forEach((p) => {
           if (!p) return;
-          const [laneStr, timeStr] = p.split(':');
-          beats.push({ time: parseFloat(timeStr), notes: [{ lane: parseInt(laneStr, 10), duration: 0, type: 'tap' }] });
+          const [laneStr, timeStr] = p.split(":");
+          beats.push({
+            time: parseFloat(timeStr),
+            notes: [{ lane: parseInt(laneStr, 10), duration: 0, type: "tap" }],
+          });
         });
         return beats.sort((a, b) => a.time - b.time);
       };
 
-      const instrumentP1 = gameMode === 'multiplayer' ? 'other' : instrumentMode;
-      const lookupDiff = difficulty === 'expert' ? 'extreme' : difficulty;
+      const instrumentP1 =
+        gameMode === "multiplayer" ? "other" : instrumentMode;
+      const lookupDiff = difficulty === "expert" ? "extreme" : difficulty;
 
-      const tryFetchBeatmap = async (songTitle: string, diff: string, inst: string) => {
+      const tryFetchBeatmap = async (
+        songTitle: string,
+        diff: string,
+        inst: string,
+      ) => {
         try {
-          const track = inst === 'other' ? 'guitar' : inst;
+          const track = inst === "other" ? "guitar" : inst;
           const path = `/beatmaps/${songTitle}/${track}_${diff}.json`;
           const resp = await fetch(path);
           if (resp.ok) {
             const data = await resp.json();
             if (data && data.beatmap && Array.isArray(data.beatmap)) {
-              return { beatmap: data.beatmap, bpm: data.bpm, speed: data.speed };
+              return {
+                beatmap: data.beatmap,
+                bpm: data.bpm,
+                speed: data.speed,
+              };
             }
             if (Array.isArray(data) && data.length > 0) {
               return data;
@@ -192,16 +265,21 @@ export function useAudioEngine() {
         return null;
       };
 
-      const customP1 = await tryFetchBeatmap(song.title, lookupDiff, instrumentP1);
-      
+      const customP1 = await tryFetchBeatmap(
+        song.title,
+        lookupDiff,
+        instrumentP1,
+      );
+
       const applyCustomBeatmap = (custom: any, ref: any) => {
         if (custom.beatmap) {
           ref.current = custom.beatmap;
           if (custom.bpm) setBpm(custom.bpm);
           if (custom.speed) {
-             if (!song.customBeatmap) song.customBeatmap = { bpm: custom.bpm || 120, speeds: {} };
-             if (!song.customBeatmap.speeds) song.customBeatmap.speeds = {};
-             song.customBeatmap.speeds[lookupDiff] = custom.speed;
+            if (!song.customBeatmap)
+              song.customBeatmap = { bpm: custom.bpm || 120, speeds: {} };
+            if (!song.customBeatmap.speeds) song.customBeatmap.speeds = {};
+            song.customBeatmap.speeds[lookupDiff] = custom.speed;
           }
         } else {
           ref.current = custom;
@@ -212,19 +290,36 @@ export function useAudioEngine() {
       if (customP1) {
         applyCustomBeatmap(customP1, beatMapRef);
       } else {
-        if (song.title === "Avenged Sevenfold - Cosmic (Multitrack)" && instrumentP1 === 'other') {
+        if (
+          song.title === "Avenged Sevenfold - Cosmic (Multitrack)" &&
+          instrumentP1 === "other"
+        ) {
           beatMapRef.current = [];
         } else {
-          await analyzeAndGenerateBeatMap(analyzeBufferP1, difficulty, beatMapRef, instrumentP1, globalBpmHint, globalOffsetHint);
+          await analyzeAndGenerateBeatMap(
+            analyzeBufferP1,
+            difficulty,
+            beatMapRef,
+            instrumentP1,
+            globalBpmHint,
+            globalOffsetHint,
+          );
         }
       }
-      
+
       if (analyzeBufferP2) {
-        const customP2 = await tryFetchBeatmap(song.title, lookupDiff, 'drums');
+        const customP2 = await tryFetchBeatmap(song.title, lookupDiff, "drums");
         if (customP2) {
           applyCustomBeatmap(customP2, beatMapP2Ref);
         } else {
-          await analyzeAndGenerateBeatMap(analyzeBufferP2, difficulty, beatMapP2Ref, 'drums', globalBpmHint, globalOffsetHint);
+          await analyzeAndGenerateBeatMap(
+            analyzeBufferP2,
+            difficulty,
+            beatMapP2Ref,
+            "drums",
+            globalBpmHint,
+            globalOffsetHint,
+          );
         }
       } else {
         beatMapP2Ref.current = [];
@@ -242,7 +337,11 @@ export function useAudioEngine() {
   };
 
   const stopAudio = () => {
-    audioSourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
+    audioSourcesRef.current.forEach((s) => {
+      try {
+        s.stop();
+      } catch (e) {}
+    });
     audioSourcesRef.current = [];
   };
 
@@ -259,6 +358,6 @@ export function useAudioEngine() {
     loadingProgress,
     isAnalyzing,
     loadSong,
-    stopAudio
+    stopAudio,
   };
 }
