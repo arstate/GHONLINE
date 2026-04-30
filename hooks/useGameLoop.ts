@@ -72,28 +72,36 @@ export function useGameLoop({
   const BASE_Y_OFFSET = 500;
   
   const getSpeedZ = useCallback(() => {
+    let baseSpeed = 600;
     if (activeSong?.customBeatmap?.speeds) {
        const lookupDiff = difficulty === 'expert' ? 'extreme' : difficulty;
        if (activeSong.customBeatmap.speeds[lookupDiff]) {
-         return activeSong.customBeatmap.speeds[lookupDiff];
+         baseSpeed = activeSong.customBeatmap.speeds[lookupDiff];
        }
+    } else {
+      const speedMap: Record<string, number> = { easy: 400, normal: 600, hard: 1000, expert: 1000 };
+      baseSpeed = speedMap[difficulty] || 600;
     }
-    const speedMap: Record<string, number> = { easy: 400, normal: 600, hard: 1000, expert: 1000 };
-    return speedMap[difficulty] || 600;
-  }, [difficulty, activeSong]);
+    // Reduce track speed for multiplayer
+    return gameMode === 'multiplayer' ? baseSpeed * 0.5 : baseSpeed;
+  }, [difficulty, activeSong, gameMode]);
+
+  const cachedScore1Ref = useRef<HTMLElement | null>(null);
+  const cachedScore2Ref = useRef<HTMLElement | null>(null);
 
   const syncScoreUI = useCallback(() => {
-    const s1 = document.getElementById('scoreDisplay');
-    const s2 = document.getElementById('scoreDisplayGame');
+    if (!cachedScore1Ref.current) cachedScore1Ref.current = document.getElementById('scoreDisplay');
+    if (!cachedScore2Ref.current) cachedScore2Ref.current = document.getElementById('scoreDisplayGame');
+    
     if (gameMode === 'multiplayer') {
       const p1Str = scoreP1Ref.current.toString().padStart(6, '0');
       const p2Str = scoreP2Ref.current.toString().padStart(6, '0');
-      if (s1) s1.textContent = `${p1Str} | ${p2Str}`;
-      if (s2) s2.textContent = `${p1Str} | ${p2Str}`;
+      if (cachedScore1Ref.current) cachedScore1Ref.current.textContent = `${p1Str} | ${p2Str}`;
+      if (cachedScore2Ref.current) cachedScore2Ref.current.textContent = `${p1Str} | ${p2Str}`;
     } else {
       const str = scoreP1Ref.current.toString().padStart(6, '0');
-      if (s1) s1.textContent = str;
-      if (s2) s2.textContent = str;
+      if (cachedScore1Ref.current) cachedScore1Ref.current.textContent = str;
+      if (cachedScore2Ref.current) cachedScore2Ref.current.textContent = str;
     }
   }, [gameMode]);
 
@@ -250,54 +258,106 @@ export function useGameLoop({
     const getScreenX = (offsetX: number, z: number, vpX: number) => vpX + offsetX * getScale(z);
     const getScreenY = (z: number) => VP_Y + BASE_Y_OFFSET * getScale(z);
 
-    const drawPuck = (ctx: CanvasRenderingContext2D, x: number, y: number, color: string, scale: number, missed: boolean, isHit: boolean = false) => {
+    const cachedPucks: Record<string, HTMLCanvasElement> = {};
+
+    const getCachedPuck = (color: string, missed: boolean, isHit: boolean) => {
+      const key = `${color}-${missed}-${isHit}`;
+      if (cachedPucks[key]) return cachedPucks[key];
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
       const baseSize = gameMode === 'multiplayer' ? 25 : 50;
-      const bRX = baseSize * scale, bRY = (baseSize * 0.36) * scale, iBRX = (baseSize * 0.9) * scale, iBRY = (baseSize * 0.3) * scale, tRX = (baseSize * 0.5) * scale, tRY = (baseSize * 0.18) * scale, nH = (baseSize * 0.4) * scale;
-      const tY = y - nH, nC = missed ? '#64748b' : color;
+      // Draw at 2x resolution for sharpness, then we use that as scale=2
+      const drawScale = 2;
+      canvas.width = baseSize * drawScale * 4;
+      canvas.height = baseSize * drawScale * 4;
+      
+      const cx = canvas.width / 2;
+      // Puck anchor (bottom center) is roughly at cy
+      const cy = canvas.height * 0.75;
+      
+      const bRX = baseSize * drawScale, bRY = (baseSize * 0.36) * drawScale, iBRX = (baseSize * 0.9) * drawScale, iBRY = (baseSize * 0.3) * drawScale, tRX = (baseSize * 0.5) * drawScale, tRY = (baseSize * 0.18) * drawScale, nH = (baseSize * 0.4) * drawScale;
+      const tY = cy - nH, nC = missed ? '#64748b' : color;
       
       // Base glow if hit
       if (isHit) {
-        ctx.save();
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 20 * scale;
         ctx.fillStyle = color + '44';
-        ctx.beginPath(); ctx.ellipse(x, y, bRX * 1.5, bRY * 1.5, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
+        ctx.beginPath(); ctx.ellipse(cx, cy, bRX * 2, bRY * 2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = color + '22';
+        ctx.beginPath(); ctx.ellipse(cx, cy, bRX * 2.5, bRY * 2.5, 0, 0, Math.PI * 2); ctx.fill();
       }
 
-      ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.ellipse(x, y, bRX, bRY, 0, 0, Math.PI * 2); ctx.fill();
-      const grad = ctx.createLinearGradient(x - iBRX, 0, x + iBRX, 0); grad.addColorStop(0, '#000'); grad.addColorStop(0.3, nC); grad.addColorStop(0.7, nC); grad.addColorStop(1, '#000');
-      ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(x, y, iBRX, iBRY, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x - iBRX, y); ctx.lineTo(x + iBRX, y); ctx.lineTo(x + tRX, tY); ctx.lineTo(x - tRX, tY); ctx.fill();
-      ctx.fillStyle = nC; ctx.beginPath(); ctx.ellipse(x, tY, tRX, tRY, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.ellipse(cx, cy, bRX, bRY, 0, 0, Math.PI * 2); ctx.fill();
+      const grad = ctx.createLinearGradient(cx - iBRX, 0, cx + iBRX, 0); grad.addColorStop(0, '#000'); grad.addColorStop(0.3, nC); grad.addColorStop(0.7, nC); grad.addColorStop(1, '#000');
+      ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(cx, cy, iBRX, iBRY, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cx - iBRX, cy); ctx.lineTo(cx + iBRX, cy); ctx.lineTo(cx + tRX, tY); ctx.lineTo(cx - tRX, tY); ctx.fill();
+      ctx.fillStyle = nC; ctx.beginPath(); ctx.ellipse(cx, tY, tRX, tRY, 0, 0, Math.PI * 2); ctx.fill();
       
-      const btRX = tRX * 0.4, btRY = tRY * 0.4, btH = 5 * scale, btTY = tY - btH;
-      ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.ellipse(x, tY, btRX, btRY, 0, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x - btRX, tY); ctx.lineTo(x + btRX, tY); ctx.lineTo(x + btRX, btTY); ctx.lineTo(x - btRX, btTY); ctx.fill();
+      const btRX = tRX * 0.4, btRY = tRY * 0.4, btH = 5 * drawScale, btTY = tY - btH;
+      ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.ellipse(cx, tY, btRX, btRY, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cx - btRX, tY); ctx.lineTo(cx + btRX, tY); ctx.lineTo(cx + btRX, btTY); ctx.lineTo(cx - btRX, btTY); ctx.fill();
       
-      // Puck top with highlight/glow
+      // Puck top
       ctx.fillStyle = '#fff'; 
-      if (!missed && scale > 0.1) {
-        ctx.shadowColor = '#fff'; 
-        ctx.shadowBlur = (isHit ? 12 : 6) * scale;
-      } else {
-        ctx.shadowBlur = 0;
+      if (!missed) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath(); ctx.ellipse(cx, btTY, btRX * 1.5, btRY * 1.5, 0, 0, Math.PI*2); ctx.fill();
+        if (isHit) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.beginPath(); ctx.ellipse(cx, btTY, btRX * 2, btRY * 2, 0, 0, Math.PI*2); ctx.fill();
+        }
       }
-      ctx.beginPath(); ctx.ellipse(x, btTY, btRX, btRY, 0, 0, Math.PI*2); ctx.fill();
-      ctx.shadowBlur = 0; 
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.ellipse(cx, btTY, btRX, btRY, 0, 0, Math.PI*2); ctx.fill();
       ctx.strokeStyle = missed ? '#94a3b8' : '#ffffff'; 
-      ctx.lineWidth = Math.max(0.5, 1 * scale);
+      ctx.lineWidth = Math.max(0.5, 1 * drawScale);
       ctx.stroke();
+
+      cachedPucks[key] = canvas;
+      return canvas;
+    };
+
+    const drawPuck = (ctx: CanvasRenderingContext2D, x: number, y: number, color: string, scale: number, missed: boolean, isHit: boolean = false) => {
+      const cached = getCachedPuck(color, missed, isHit);
+      if (!cached) return;
+      
+      const drawScale = 2; // Matches drawScale used in cache
+      // The canvas width is (baseSize * 4 * drawScale)
+      // The scale multiplier adjusts it to the requested scale
+      const targetWidth = (cached.width / drawScale) * scale;
+      const targetHeight = (cached.height / drawScale) * scale;
+      
+      const cxOffset = targetWidth / 2;
+      const cyOffset = targetHeight * 0.75;
+      
+      ctx.drawImage(cached, x - cxOffset, y - cyOffset, targetWidth, targetHeight);
     };
 
 
     let animationId: number;
     let lastFrameTime = performance.now();
     const lastGamepadState = { current: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false] };
+    
+    let ts1Cached: HTMLElement | null = null;
+    let ts2Cached: HTMLElement | null = null;
+    let fpsCached: HTMLElement | null = null;
+    let frameCount = 0;
+    let lastFpsTime = performance.now();
 
     const loop = (time: number) => {
       const deltaTime = Math.min((time - lastFrameTime) / 1000, 0.1);
       lastFrameTime = time;
+
+      frameCount++;
+      if (time - lastFpsTime >= 1000) {
+        const fps = Math.round((frameCount * 1000) / (time - lastFpsTime));
+        if (!fpsCached) fpsCached = document.getElementById('fpsDisplay');
+        if (fpsCached) fpsCached.textContent = `${fps} FPS`;
+        frameCount = 0;
+        lastFpsTime = time;
+      }
 
       // Handle Gamepads for both P1 and P2
       const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -403,10 +463,10 @@ export function useGameLoop({
         }
         const speed = getSpeedZ();
         trackScrollYRef.current += speed * deltaTime * 0.95;
-        const ts1 = document.getElementById('trackSurfaceP1');
-        const ts2 = document.getElementById('trackSurfaceP2');
-        if (ts1) ts1.style.backgroundPositionY = `${trackScrollYRef.current}px`;
-        if (ts2) ts2.style.backgroundPositionY = `${trackScrollYRef.current}px`;
+        if (!ts1Cached) ts1Cached = document.getElementById('trackSurfaceP1');
+        if (!ts2Cached && gameMode === 'multiplayer') ts2Cached = document.getElementById('trackSurfaceP2');
+        if (ts1Cached) ts1Cached.style.backgroundPositionY = `${trackScrollYRef.current}px`;
+        if (ts2Cached) ts2Cached.style.backgroundPositionY = `${trackScrollYRef.current}px`;
 
         if (audioCtxRef.current) {
           const pbTime = (audioCtxRef.current.currentTime - startTimeRef.current) + (audioOffset / 1000);
@@ -443,13 +503,15 @@ export function useGameLoop({
           }
         }
 
+        let scoreChanged = false;
+
         // Update P1 Notes
         for (let i = notesP1Ref.current.length - 1; i >= 0; i--) {
           const n = notesP1Ref.current[i];
           n.z -= n.speedZ * deltaTime;
           if (n.isActiveHold) {
             scoreP1Ref.current += 1;
-            syncScoreUI();
+            scoreChanged = true;
             n.lengthZ -= n.speedZ * deltaTime;
             n.z = 0;
             if (n.lengthZ <= 0) {
@@ -469,7 +531,7 @@ export function useGameLoop({
           n.z -= n.speedZ * deltaTime;
           if (n.isActiveHold) {
             scoreP2Ref.current += 1;
-            syncScoreUI();
+            scoreChanged = true;
             n.lengthZ -= n.speedZ * deltaTime;
             n.z = 0;
             if (n.lengthZ <= 0) {
@@ -487,6 +549,8 @@ export function useGameLoop({
           if (laneHitStatesP1Ref.current[i] > 0) laneHitStatesP1Ref.current[i] -= deltaTime;
           if (laneHitStatesP2Ref.current[i] > 0) laneHitStatesP2Ref.current[i] -= deltaTime;
         }
+
+        if (scoreChanged) syncScoreUI();
       }
 
       ctx.clearRect(0, 0, width, height);
@@ -537,6 +601,7 @@ export function useGameLoop({
             // Draw idle image
             // Menambahkan (4 * s) untuk menggeser sedikit ke bawah
             ctx.drawImage(hitImg, x - imgWidth / 2, y - imgHeight / 2 + (4 * s), imgWidth, imgHeight);
+
             ctx.restore();
 
             // Draw pressed image overlay if active
@@ -548,9 +613,10 @@ export function useGameLoop({
 
         }
 
-        const sorted = [...notes].sort((a, b) => b.z - a.z);
-        sorted.forEach(n => {
-          if (n.z > START_Z + 200) return;
+        // Iterate backwards: newest (highest z/furthest away) are drawn first, oldest (lowest z/closest) drawn last
+        for (let i = notes.length - 1; i >= 0; i--) {
+          const n = notes[i];
+          if (n.z > START_Z + 200) continue;
           const off = (n.lane - 2) * LANE_GAP;
           const color = n.missed ? '#333333' : n.color; // Darker grey for missed
           if (n.type === 'hold' && n.lengthZ > 0 && n.z <= START_Z) {
@@ -562,9 +628,9 @@ export function useGameLoop({
              ctx.moveTo(xB - wB, yB); ctx.lineTo(xB + wB, yB); ctx.lineTo(xT + wT, yT); ctx.lineTo(xT - wT, yT); ctx.fill();
           }
           const scale = getScale(n.z);
-          if (scale < 0.02) return;
+          if (scale < 0.02) continue;
           drawPuck(ctx, getScreenX(off, n.z, vpX), getScreenY(n.z), n.color, scale, n.missed);
-        });
+        }
       };
 
       if (gameMode === 'multiplayer') {

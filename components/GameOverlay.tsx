@@ -11,11 +11,14 @@ interface GameOverlayProps {
 export function GameOverlay({ score, bpm, onPause, gameState }: GameOverlayProps) {
   return (
     <div className="absolute top-4 left-4 right-4 flex justify-between pointer-events-none z-30">
-      <div id="scoreDisplayGame" className="text-3xl font-black tracking-tighter text-white drop-shadow-md">
+      <div id="scoreDisplayGame" className="text-3xl font-black tracking-tighter text-white" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
         {score.toString().padStart(6, '0')}
       </div>
+      <div id="fpsDisplay" className="absolute left-1/2 -translate-x-1/2 text-sm font-mono font-bold text-gray-400 mt-2" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+        60 FPS
+      </div>
       <div className="flex gap-4 pointer-events-auto items-center">
-        <div className="text-sm font-bold tracking-widest text-emerald-400 drop-shadow-md mt-1 mr-2">
+        <div className="text-sm font-bold tracking-widest text-emerald-400 mt-1 mr-2" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
           BPM: {bpm}
         </div>
         {gameState === 'game' && (
