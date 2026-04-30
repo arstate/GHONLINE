@@ -31,8 +31,12 @@ export const defaultPlaylist: Song[] = [
       bass: "https://ia601906.us.archive.org/12/items/ghea-indrawari-teramini-cover-damnt-rh-youtube-bass-ab-major-158bpm-441hz/Ghea%20Indrawari%20-%20Teramini%20%28COVER%29%20-%20damnt_rh%20%28youtube%29-bass-Ab%20major-158bpm-441hz.mp3"
     },
     customBeatmap: {
-      bpm: 105,
-      speeds: { easy: 400, extreme: 1100, hard: 800, normal: 600 }
+      bpm: 158,
+      speeds: { easy: 400, normal: 600, hard: 800, extreme: 1100 },
+      tracks: {
+        other: { hard: 'json', extreme: 'json' },
+        drums: { hard: 'json', extreme: 'json' }
+      }
     }
   },
   {
