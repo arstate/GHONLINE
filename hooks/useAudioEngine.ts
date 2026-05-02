@@ -243,7 +243,7 @@ export function useAudioEngine() {
         inst: string,
       ) => {
         try {
-          const track = inst === "other" ? "guitar" : inst;
+          const track = inst === "other" ? "guitar" : inst === "drums" ? "drum" : inst;
           const path = `/beatmaps/${songTitle}/${track}_${diff}.json`;
           const resp = await fetch(path);
           if (resp.ok) {

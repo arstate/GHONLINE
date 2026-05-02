@@ -396,6 +396,14 @@ export default function RhythmGame() {
         </div>
       )}
 
+      {/* FPS Display */}
+      <div 
+        id="fpsDisplay" 
+        className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] text-emerald-500 font-mono font-bold text-sm bg-black/60 px-4 py-1.5 rounded-full border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.3)] backdrop-blur-sm tracking-widest uppercase"
+      >
+        60 FPS
+      </div>
+
       {showSettings && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4">
           <AnimatePresence mode="wait">

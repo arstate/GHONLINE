@@ -111,6 +111,18 @@ export const defaultPlaylist: Song[] = [
       bass: "https://ia601406.us.archive.org/27/items/dewa-19-aku-milikmu-official-music-video-aquarius-musikindo-bass-e-major-135bpm-441hz/Dewa%2019%20-%20Aku%20Milikmu%20Official%20Music%20Video%20-%20Aquarius%20Musikindo-bass-E%20major-135bpm-441hz.mp3",
       metronome: "https://ia600505.us.archive.org/12/items/dewa-19-aku-milikmu-official-music-video-aquarius-musikindo-metronome-e-major-135bpm-441hz/Dewa%2019%20-%20Aku%20Milikmu%20Official%20Music%20Video%20-%20Aquarius%20Musikindo-metronome-E%20major-135bpm-441hz.mp3"
     }
+  },
+  {
+    id: '12',
+    title: "Gunslinger - Avenged Sevenfold (Multitrack)",
+    type: 'remote',
+    stems: {
+      vocals: "https://ia601906.us.archive.org/9/items/gunslinger-avenged-sevenfold-vocals-d-minor-81bpm-441hz/Gunslinger%20-%20Avenged%20Sevenfold-vocals-D%20minor-81bpm-441hz.mp3",
+      other: "https://ia800609.us.archive.org/26/items/gunslinger-avenged-sevenfold-other-d-minor-81bpm-441hz/Gunslinger%20-%20Avenged%20Sevenfold-other-D%20minor-81bpm-441hz.mp3",
+      drums: "https://ia801500.us.archive.org/19/items/gunslinger-avenged-sevenfold-drums-d-minor-81bpm-441hz/Gunslinger%20-%20Avenged%20Sevenfold-drums-D%20minor-81bpm-441hz.mp3",
+      bass: "https://ia600604.us.archive.org/30/items/gunslinger-avenged-sevenfold-bass-d-minor-81bpm-441hz/Gunslinger%20-%20Avenged%20Sevenfold-bass-D%20minor-81bpm-441hz.mp3",
+      metronome: "https://ia903207.us.archive.org/26/items/gunslinger-avenged-sevenfold-metronome-d-minor-81bpm-441hz/Gunslinger%20-%20Avenged%20Sevenfold-metronome-D%20minor-81bpm-441hz.mp3"
+    }
   }
 ];
 

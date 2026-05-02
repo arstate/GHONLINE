@@ -104,8 +104,8 @@ export function useGameLoop({
       };
       baseSpeed = speedMap[difficulty] || 600;
     }
-    // Reduce track speed for multiplayer
-    return gameMode === "multiplayer" ? baseSpeed * 0.5 : baseSpeed;
+    // Reduce track speed further for multiplayer
+    return gameMode === "multiplayer" ? baseSpeed * 0.35 : baseSpeed;
   }, [difficulty, activeSong, gameMode]);
 
   const cachedScore1Ref = useRef<HTMLElement | null>(null);
@@ -800,6 +800,20 @@ export function useGameLoop({
             const imgWidth = (gameMode === "multiplayer" ? 62 : 132) * s;
             const imgHeight = (gameMode === "multiplayer" ? 25 : 53) * s;
 
+            // Hit Particle/Glow effect when a note is successfully hit
+            if (hitStates[i] > 0) {
+              const glowAlpha = Math.min(1, hitStates[i] * 6.66); // 0.15 * 6.66 ~ 1.0
+              ctx.save();
+              ctx.shadowColor = ["#10b981", "#f43f5e", "#f59e0b", "#3b82f6", "#f97316"][i];
+              ctx.shadowBlur = 30 * s;
+              ctx.fillStyle = ctx.shadowColor;
+              ctx.globalAlpha = glowAlpha * 0.8;
+              ctx.beginPath();
+              ctx.ellipse(x, y, imgWidth * 0.8, imgHeight * 0.8, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+
             // Add soft drop shadow for 3D/Ambient Occlusion effect
             ctx.save();
             ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
@@ -819,8 +833,12 @@ export function useGameLoop({
 
             ctx.restore();
 
-            // Draw pressed image overlay if active
             if (isPressed && pressedImg) {
+              ctx.save();
+              ctx.shadowColor = "rgba(255, 255, 255, 0.3)";
+              ctx.shadowBlur = 15 * s;
+              ctx.shadowOffsetX = 0;
+              ctx.shadowOffsetY = 0;
               ctx.drawImage(
                 pressedImg,
                 x - imgWidth / 2,
@@ -828,6 +846,7 @@ export function useGameLoop({
                 imgWidth,
                 imgHeight,
               );
+              ctx.restore();
             }
           }
         }
